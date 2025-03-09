@@ -1,0 +1,86 @@
+# Hydra version
+version_base: 1.3
+# We can specify defaults or additional config merges here if needed
+defaults: []
+
+# Global configuration
+signed: false
+fewshot:
+  enabled: true
+  samples: 120
+  batch_size: 17
+num_trials: 1
+num_epochs: 10
+batch_size: 64
+learning_rate: 0.001
+
+# Paths for connectivity data
+csv_paths:
+  signed: "./data/signed_connectivity_matrix.csv"
+  unsigned: "./data/ad_connectivity_matrix.csv"
+annotation_path: "./data/science.add9330_data_s2.csv"
+
+# Experiment definitions
+experiments:  
+  # 1. learnable DPU (maintaining same sparsity pattern)
+  Learnable_DPU:
+    type: drosophilarnn
+    trainable: true
+    pruning: 
+      enable: true
+      constraint: structure
+      lambda_reg: 0.0002
+      max_iter: 200
+      fista_threshold: 0.01
+      fista_gamma: 0.7
+    init: droso
+    ref: droso
+  # 2. unlearnable DPU
+  Unlearnable_DPU:
+    type: drosophilarnn
+    trainable: false
+    init: droso
+
+  # 3. learnable RNN (maintaining the same sparsity, but not the same sparsity pattern)
+  Learnable_RNN_Same_Sparsity: 
+    type: drosophilarnn
+    trainable: true
+    pruning: 
+      enable: true
+      constraint: sparsity
+      # manually random selected, need to be real random futher
+      target_nonzeros:  
+          W_ss: 82
+          W_sr: 200
+          W_rs: 700
+          W_rr: 61013
+      max_iter: 100
+    init: droso
+    ref: randsparse
+  # 4. unlearnable RNN (maintaining the same sparsity, but not the same sparsity pattern)
+  Unlearnable_RNN_Same_Sparsity:
+    type: drosophilarnn
+    trainable: false
+    init: randsparse
+
+  # 5. learnable RNN (no sparsity)
+  Learnable_RNN_No_Sparsity:
+    type: drosophilarnn
+    trainable: true
+    init: droso
+  # 6. unlearnable RNN (no sparsity)
+  Unlearnable_RNN_No_Sparsity:
+    type: drosophilarnn
+    trainable: false
+    init: random
+
+  # 7. learnable MLP (1 hidden layer, same hidden neurons as droso)
+  Single_29_MLP:
+    type: singlemlp
+
+  # 8. learnable MLP (2 hidden layer, same total weight as droso)
+  Twohidden_29_MLP:
+    type: twohiddenmlp
+  # 9. unlearnable MLP (2 hidden layer, same total weight as droso)
+  Static_29_MLP:
+    type: staticmlp
