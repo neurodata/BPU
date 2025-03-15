@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-def load_drosophila_matrix(csv_path, apply_pruning=False, signed=False):
+def load_drosophila_matrix(csv_path, signed=False):
     """
     Load and process a Drosophila connectivity matrix.
     """
@@ -16,12 +16,9 @@ def load_drosophila_matrix(csv_path, apply_pruning=False, signed=False):
         W_min, W_max = W.min(), W.max()
         W_norm = (W - W_min) / (W_max - W_min + 1e-8)
 
-    if apply_pruning:
-        non_zero_count = np.count_nonzero(W)
-        return W_norm, non_zero_count
     return W_norm
 
-def load_connectivity_data(connectivity_path, annotation_path):
+def load_connectivity_data(connectivity_path, annotation_path, rescale_factor=2e-2):
     """
     Load and preprocess connectivity matrix and annotation data for Drosophila.
     """
@@ -54,10 +51,11 @@ def load_connectivity_data(connectivity_path, annotation_path):
     df_reindexed = df_conn.loc[valid_sensory_ids + other_ids, valid_sensory_ids + other_ids]
 
     # Scale the matrix
-    adj_matrix = df_reindexed.values * 2e-2
+    adj_matrix = df_reindexed.values * rescale_factor
 
     num_S = len(valid_sensory_ids)
     return {
+        'W': adj_matrix,
         'W_ss': adj_matrix[:num_S, :num_S],
         'W_sr': adj_matrix[:num_S, num_S:],
         'W_rs': adj_matrix[num_S:, :num_S],
@@ -65,17 +63,16 @@ def load_connectivity_data(connectivity_path, annotation_path):
         'sensory_ids': valid_sensory_ids
     }
 
-def load_sio_connectivity_data(connectivity_path, annotation_path):
+def load_sio_connectivity_data(connectivity_path, annotation_path, rescale_factor):
     """
-    Load and process connectivity matrix and neuron annotations (Sensory-Internal-Output).
+    Load and process the connectivity matrix and neuron annotations, splitting neurons into
+    Sensory, Internal, and Output groups, then return a dictionary of 9 connectivity sub-matrices
+    (as NumPy arrays) plus the neuron ID lists.
     """
-    # Load neuron annotations
-    df_annot = pd.read_csv(annotation_path)
 
-    # Extract IDs for sensory, internal, and output neurons
+    df_annot = pd.read_csv(annotation_path)
     output_types = {'DN-SEZ', 'DN-VNC', 'RGN'}
     sensory_ids = []
-    internal_brain_ids = []
     output_ids = []
 
     for _, row in df_annot.iterrows():
@@ -84,81 +81,77 @@ def load_sio_connectivity_data(connectivity_path, annotation_path):
         for col in ['left_id', 'right_id']:
             id_str = str(row[col]).lower()
             if id_str != "no pair":
-                neuron_id = int(id_str)
+                try:
+                    neuron_id = int(id_str)
+                except ValueError:
+                    continue
+                # Classify neuron
                 if cell_type == 'sensory' and additional_annotations == 'visual':
                     sensory_ids.append(neuron_id)
                 elif cell_type in output_types:
                     output_ids.append(neuron_id)
-                else:
-                    internal_brain_ids.append(neuron_id)
 
-    # Remove duplicates and sort
     sensory_ids = sorted(set(sensory_ids))
-    internal_brain_ids = sorted(set(internal_brain_ids))
     output_ids = sorted(set(output_ids))
 
-    # Load connectivity matrix
+    print(f"Annotation file: Found {len(sensory_ids)} sensory neuron IDs")
+    print(f"Annotation file: Found {len(output_ids)} output neuron IDs")
+
     df_conn = pd.read_csv(connectivity_path, index_col=0)
     df_conn.index = df_conn.index.astype(int)
     df_conn.columns = df_conn.columns.astype(int)
+    all_neuron_ids = sorted(df_conn.index.tolist())
+    print(f"Connectivity matrix contains {len(all_neuron_ids)} neurons")
 
-    # Filter valid IDs
-    valid_sensory_ids = [nid for nid in sensory_ids if nid in df_conn.index]
-    valid_internal_ids = [nid for nid in internal_brain_ids if nid in df_conn.index]
-    valid_output_ids = [nid for nid in output_ids if nid in df_conn.index]
+    valid_sensory_ids = [nid for nid in sensory_ids if nid in all_neuron_ids]
+    valid_output_ids = [nid for nid in output_ids if nid in all_neuron_ids]
 
-    # Reorder
-    all_neuron_ids = df_conn.index.tolist()
-    valid_internal_ids = list(set(all_neuron_ids) - set(valid_sensory_ids) - set(valid_output_ids))
-    valid_ids = valid_sensory_ids + valid_internal_ids + valid_output_ids
-    df_reindexed = df_conn.loc[valid_ids, valid_ids]
+    # Define internal neurons as the rest ---
+    valid_internal_ids = [
+        nid for nid in all_neuron_ids
+        if nid not in valid_sensory_ids and nid not in valid_output_ids
+    ]
 
-    print(f"Found {len(valid_sensory_ids)} sensory neurons")
-    print(f"Found {len(valid_internal_ids)} internal brain neurons")
-    print(f"Found {len(valid_output_ids)} output neurons")
+    print(f"After filtering, found {len(valid_sensory_ids)} sensory neurons in matrix")
+    print(f"After filtering, found {len(valid_output_ids)} output neurons in matrix")
+    print(f"Remaining {len(valid_internal_ids)} neurons classified as internal")
 
-    # Scale
-    adj_matrix = df_reindexed.values * 1e-2
+    adjacency = df_conn.values  # shape: [N, N]
+    ordered_ids = df_conn.index.tolist() 
+    id_to_idx = {nid: i for i, nid in enumerate(ordered_ids)}
 
-    num_sensory = len(valid_sensory_ids)
-    num_internal = len(valid_internal_ids)
-    num_output = len(valid_output_ids)
+    sensory_idx = [id_to_idx[nid] for nid in valid_sensory_ids]
+    internal_idx = [id_to_idx[nid] for nid in valid_internal_ids]
+    output_idx = [id_to_idx[nid] for nid in valid_output_ids]
+
+    adjacency = adjacency * rescale_factor
+
+    W_ss = adjacency[np.ix_(sensory_idx, sensory_idx)]
+    W_sr = adjacency[np.ix_(sensory_idx, internal_idx)]
+    W_so = adjacency[np.ix_(sensory_idx, output_idx)]
+
+    W_rs = adjacency[np.ix_(internal_idx, sensory_idx)]
+    W_rr = adjacency[np.ix_(internal_idx, internal_idx)]
+    W_ro = adjacency[np.ix_(internal_idx, output_idx)]
+
+    W_os = adjacency[np.ix_(output_idx, sensory_idx)]
+    W_or = adjacency[np.ix_(output_idx, internal_idx)]
+    W_oo = adjacency[np.ix_(output_idx, output_idx)]
 
     return {
-        'W_ss': adj_matrix[:num_sensory, :num_sensory],
-        'W_sr': adj_matrix[:num_sensory, num_sensory:num_sensory+num_internal],
-        'W_so': adj_matrix[:num_sensory, num_sensory+num_internal:],
-
-        'W_rs': adj_matrix[num_sensory:num_sensory+num_internal, :num_sensory],
-        'W_rr': adj_matrix[num_sensory:num_sensory+num_internal, num_sensory:num_sensory+num_internal],
-        'W_ro': adj_matrix[num_sensory:num_sensory+num_internal, num_sensory+num_internal:],
-
-        'W_os': adj_matrix[num_sensory+num_internal:, :num_sensory],
-        'W_or': adj_matrix[num_sensory+num_internal:, num_sensory:num_sensory+num_internal],
-        'W_oo': adj_matrix[num_sensory+num_internal:, num_sensory+num_internal:],
-
+        'W': adjacency,
+        'W_ss': W_ss,
+        'W_sr': W_sr,
+        'W_so': W_so,
+        'W_rs': W_rs,
+        'W_rr': W_rr,
+        'W_ro': W_ro,
+        'W_or': W_or,
+        'W_os': W_os,
+        'W_oo': W_oo,
         'sensory_ids': valid_sensory_ids,
         'internal_ids': valid_internal_ids,
         'output_ids': valid_output_ids
-    }
-
-def load_random_matrix(adj_matrix, num_S):
-    """
-    Load a random matrix for testing or fallback scenarios.
-    """
-    # Scale the matrix
-    adj_matrix = adj_matrix * 1e-2
-
-    # Mock sensory IDs
-    sensory_ids = sorted(set(range(1, 30)))
-    print(f"Found {len(sensory_ids)} sensory-visual neuron IDs (random)")
-
-    return {
-        'W_ss': adj_matrix[:num_S, :num_S],
-        'W_sr': adj_matrix[:num_S, num_S:],
-        'W_rs': adj_matrix[num_S:, :num_S],
-        'W_rr': adj_matrix[num_S:, num_S:],
-        'sensory_ids': sensory_ids
     }
 
 def convert_unsigned_to_signed(sign_csv_path, adjacency_csv_path, out_csv_path):
