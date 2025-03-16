@@ -2,10 +2,10 @@
 signed: true
 sio: true # sio: sensory-interneuron-output
 fewshot:
-  enabled: true
+  enabled: false
   samples: 300
   batch_size: 17
-num_trials: 10
+num_trials: 1
 num_epochs: 10
 batch_size: 64
 learning_rate: 0.001
@@ -19,15 +19,15 @@ rescale_factor: 0.04
 
 # Experiment definitions
 experiments:  
-  # 1. DPU-LORA: rather than fine-tuning the DPU, do the LORA thing, where we literally add a low-rank matrix to it
-  DPU_LoRA:
-    type: basicrnn
-    trainable: false  # Keep DPU weights frozen
-    init: droso
-    lora:
-      enabled: true
-      rank: 8      # r parameter from LoRA paper
-      alpha: 16    # alpha scaling factor
+  # # 1. DPU-LORA: rather than fine-tuning the DPU, do the LORA thing, where we literally add a low-rank matrix to it
+  # DPU_LoRA:
+  #   type: basicrnn
+  #   trainable: false  # Keep DPU weights frozen
+  #   init: droso
+  #   lora:
+  #     enabled: true
+  #     rank: 8      # r parameter from LoRA paper
+  #     alpha: 16    # alpha scaling factor
 
   # # 2. unlearnable DPU
   # Unlearnable_DPU:
@@ -35,33 +35,33 @@ experiments:
   #   trainable: false
   #   init: droso
 
-  # # 3. learnable RNN (maintaining the same sparsity, but not the same sparsity pattern)
-  # Learnable_RNN_Same_Sparsity: 
-  #   type: basicrnn
-  #   trainable: true
-  #   init: permuted_droso
-  #   trainable: true
-  #   pruning: true
-  #   lambda_l1: 0.0001
+  # 3. learnable RNN (maintaining the same sparsity, but not the same sparsity pattern)
+  Learnable_RNN_Same_Sparsity: 
+    type: basicrnn
+    trainable: true
+    init: permuted_droso
+    trainable: true
+    pruning: true
+    lambda_l1: 0.0001
 
-  # # 4. unlearnable RNN (maintaining the same sparsity, but not the same sparsity pattern)
-  # Unlearnable_RNN_Same_Sparsity:
-  #   type: basicrnn
-  #   init: randsparse
-  #   trainable: false
-  #   pruning: false
+  # 4. unlearnable RNN (maintaining the same sparsity, but not the same sparsity pattern)
+  Unlearnable_RNN_Same_Sparsity:
+    type: basicrnn
+    init: permuted_droso
+    trainable: false
+    pruning: false
 
-  # # 5. learnable RNN (no sparsity)
-  # Learnable_RNN_No_Sparsity:
-  #   type: basicrnn
-  #   trainable: true
-  #   init: droso
+  # 5. learnable RNN (no sparsity)
+  Learnable_RNN_No_Sparsity:
+    type: basicrnn
+    trainable: true
+    init: droso
 
-  # # 6. unlearnable RNN (no sparsity)
-  # Unlearnable_RNN_No_Sparsity:
-  #   type: basicrnn
-  #   trainable: false
-  #   init: random
+  # 6. unlearnable RNN (no sparsity)
+  Unlearnable_RNN_No_Sparsity:
+    type: basicrnn
+    trainable: false
+    init: random
 
   # # 10. Unlearnable MLP (3 hidden layer, same total weight as droso)
   # Unlearnable_Threehidden_MLP:

@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-import math
+import torch.nn.functional as F
 
 class BasicRNN(nn.Module):
     def __init__(self, 
@@ -16,7 +16,8 @@ class BasicRNN(nn.Module):
                  lambda_l1: float = 1e-4,
                  use_lora: bool = False,
                  lora_rank: int = 8,
-                 lora_alpha: float = 16):
+                 lora_alpha: float = 16,
+                 ):
         """
         Unifies W_ss, W_sr, W_rs, W_rr, W_ro, W_or, W_so, W_oo, W_os into one
         big matrix W of shape (S+I+O, S+I+O). We'll slice it for sub-blocks.
@@ -42,6 +43,10 @@ class BasicRNN(nn.Module):
         print(f"W_init.shape: {W_init.shape}, sensory_dim: {sensory_dim}, internal_dim: {internal_dim}, output_dim: {output_dim}")
         assert W_init.shape[0] == self.total_dim
         
+        # Store initial weights and sparsity mask for similarity comparison
+        self.register_buffer('W_init', torch.tensor(W_init, dtype=torch.float32))
+        self.register_buffer('sparsity_mask', torch.tensor(W_init != 0, dtype=torch.float32))
+        
         # Initialize base weight matrix (frozen DPU weights)
         W_init_tensor = torch.tensor(W_init, dtype=torch.float32)
         if trainable:
@@ -56,17 +61,20 @@ class BasicRNN(nn.Module):
         self.lora_scaling = lora_alpha / lora_rank
 
         if use_lora:
-            # Initialize LoRA matrices A and B
-            # A: [total_dim × rank], B: [rank × total_dim]
-            self.lora_A = nn.Parameter(torch.zeros(self.total_dim, lora_rank))
-            self.lora_B = nn.Parameter(torch.zeros(lora_rank, self.total_dim))
-            # Initialize with small random values
-            nn.init.kaiming_uniform_(self.lora_A, a=math.sqrt(5))
-            nn.init.zeros_(self.lora_B)  # Initialize B to zero as in LoRA paper
+            # Initialize LoRA matrices A and B with improved initialization
+            self.lora_A = nn.Parameter(torch.empty(self.total_dim, lora_rank))
+            self.lora_B = nn.Parameter(torch.empty(lora_rank, self.total_dim))
+            
+            # Use SVD-based initialization for better starting point
+            U, S, V = torch.svd(W_init_tensor)
+            # Initialize A with first r singular vectors
+            self.lora_A.data.copy_(U[:, :lora_rank] * torch.sqrt(S[:lora_rank].unsqueeze(0)))
+            # Initialize B with first r singular vectors
+            self.lora_B.data.copy_(torch.sqrt(S[:lora_rank].unsqueeze(1)) * V[:, :lora_rank].t())
+            # Scale B to make initial LoRA contribution small
+            self.lora_B.data.mul_(0.01)
 
-        # Input projection (input -> S)
         self.input_proj = nn.Linear(input_dim, sensory_dim)
-        # Output layer (O -> num_classes)
         self.output_layer = nn.Linear(output_dim, num_classes)
         self.activation = nn.ReLU()
 
@@ -77,7 +85,49 @@ class BasicRNN(nn.Module):
         
         # Compute LoRA contribution: (A × B) × scaling
         lora_contribution = (self.lora_A @ self.lora_B) * self.lora_scaling
-        return self.W + lora_contribution
+        
+        # Combine base weights with LoRA contribution
+        effective_W = self.W + lora_contribution
+
+        # Apply sparsity mask to maintain sparsity pattern
+        return effective_W * self.sparsity_mask
+
+
+    def calculate_matrix_similarity(self):
+        """
+        Calculate similarity metrics between initial and current effective weight matrix.
+        """
+        W_eff = self.get_effective_W()
+        W_init = self.W_init
+        
+        # Cosine similarity
+        W_eff_flat = W_eff.flatten()
+        W_init_flat = W_init.flatten()
+        cosine_sim = F.cosine_similarity(W_eff_flat.unsqueeze(0), W_init_flat.unsqueeze(0))
+        
+        # Frobenius norm of difference
+        frob_diff = torch.norm(W_eff - W_init, p='fro')
+        
+        # Relative Frobenius norm
+        rel_frob_diff = frob_diff / torch.norm(W_init, p='fro')
+        
+        # Sparsity comparison
+        init_sparsity = (W_init == 0).float().mean()
+        eff_sparsity = (W_eff == 0).float().mean()
+        
+        # Additional sparsity metrics
+        shared_nonzeros = ((W_init != 0) & (W_eff != 0)).float().mean()
+        new_nonzeros = ((W_init == 0) & (W_eff != 0)).float().mean()
+        
+        return {
+            'cosine_similarity': cosine_sim.item(),
+            'frobenius_diff': frob_diff.item(),
+            'relative_frobenius_diff': rel_frob_diff.item(),
+            'init_sparsity': init_sparsity.item(),
+            'effective_sparsity': eff_sparsity.item(),
+            'shared_nonzeros': shared_nonzeros.item(),
+            'new_nonzeros': new_nonzeros.item()
+        }
 
     def forward(self, x, time_steps=10):
         """
@@ -141,10 +191,7 @@ class BasicRNN(nn.Module):
             W_flat = self.W.view(-1)
             numel = W_flat.numel()
             
-            # Sort by absolute value (descending)
             values, indices = torch.sort(W_flat.abs(), descending=True)
-            
-            # Get threshold value
             if self.target_nonzeros >= numel:
                 return
             threshold = values[self.target_nonzeros]
@@ -178,7 +225,6 @@ class ThreeHiddenMLP(nn.Module):
         self.relu = nn.ReLU()
 
     def forward(self, x):
-        # Reshape input if needed
         x = x.view(x.size(0), -1)
 
         hidden1 = self.relu(self.input_to_hidden1(x))
