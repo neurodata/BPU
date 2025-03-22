@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import os
+import pickle
 
 class BasicRNN(nn.Module):
     def __init__(self, 
@@ -199,6 +201,90 @@ class BasicRNN(nn.Module):
             # Zero out values below threshold
             mask = (self.W.abs() >= threshold)
             self.W.data.mul_(mask.float())
+
+    def save_model(self, path, filename, metadata=None):
+        """
+        Save model to pickle file with optional metadata
+        
+        Args:
+            path: Directory to save model to
+            filename: Filename to save model as
+            metadata: Optional dictionary of metadata to save with model
+        """
+        os.makedirs(path, exist_ok=True)
+        full_path = os.path.join(path, filename)
+        
+        # Prepare model state and metadata
+        save_dict = {
+            'model_state': self.state_dict(),
+            'config': {
+                'sensory_dim': self.sensory_dim,
+                'internal_dim': self.internal_dim,
+                'output_dim': self.output_dim,
+                'use_lora': self.use_lora,
+                'lora_rank': self.lora_rank if hasattr(self, 'lora_rank') else None,
+                'lora_alpha': self.lora_alpha if hasattr(self, 'lora_alpha') else None,
+            }
+        }
+        
+        # Add optional metadata if provided
+        if metadata is not None:
+            save_dict['metadata'] = metadata
+            
+        # Save to pickle file
+        with open(full_path, 'wb') as f:
+            pickle.dump(save_dict, f)
+            
+        return full_path
+        
+    @classmethod
+    def load_model(cls, path, device=None):
+        """
+        Load model from pickle file
+        
+        Args:
+            path: Path to saved model file
+            device: Device to load model to (e.g. 'cpu' or 'cuda')
+            
+        Returns:
+            Loaded model instance
+        """
+        if device is None:
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            
+        # Load from pickle file
+        with open(path, 'rb') as f:
+            save_dict = pickle.load(f)
+            
+        # Extract config and state dict
+        config = save_dict['config']
+        state_dict = save_dict['model_state']
+        
+        # Get W_init from state dict
+        W_init = state_dict['W_init'].cpu().numpy()
+        
+        # Create new model instance
+        model = cls(
+            W_init=W_init,
+            input_dim=state_dict['input_proj.weight'].shape[1],  # Get from input projection weight
+            sensory_dim=config['sensory_dim'],
+            internal_dim=config['internal_dim'],
+            output_dim=config['output_dim'],
+            num_classes=state_dict['output_layer.weight'].shape[0],  # Get from output layer weight
+            use_lora=config['use_lora'],
+            lora_rank=config.get('lora_rank', 8),
+            lora_alpha=config.get('lora_alpha', 16),
+        )
+        
+        # Load state dict
+        model.load_state_dict(state_dict)
+        model.to(device)
+        
+        # Add metadata if available
+        if 'metadata' in save_dict:
+            model.metadata = save_dict['metadata']
+            
+        return model
 
 class ThreeHiddenMLP(nn.Module):
     def __init__(self, input_size=784, hidden1_size=29, hidden2_size=147, hidden3_size=400, output_size=10, 

@@ -22,10 +22,8 @@ def load_connectivity_data(connectivity_path, annotation_path, rescale_factor=2e
     """
     Load and preprocess connectivity matrix and annotation data for Drosophila.
     """
-    # Load annotation file
     df_annot = pd.read_csv(annotation_path)
 
-    # Extract IDs of visual sensory neurons
     mask = (df_annot['celltype'] == 'sensory') & (df_annot['additional_annotations'] == 'visual')
     sensory_visual_ids = []
     for _, row in df_annot[mask].iterrows():
@@ -34,23 +32,18 @@ def load_connectivity_data(connectivity_path, annotation_path, rescale_factor=2e
             if id_str != "no pair":
                 sensory_visual_ids.append(int(id_str))
 
-    # Remove duplicates and sort
     sensory_visual_ids = sorted(set(sensory_visual_ids))
     print(f"Found {len(sensory_visual_ids)} sensory-visual neuron IDs")
 
-    # Load connectivity matrix
     df_conn = pd.read_csv(connectivity_path, index_col=0)
     df_conn.index = df_conn.index.astype(int)
     df_conn.columns = df_conn.columns.astype(int)
 
-    # Filter valid IDs
     valid_sensory_ids = [nid for nid in sensory_visual_ids if nid in df_conn.index]
     other_ids = [nid for nid in df_conn.index if nid not in valid_sensory_ids]
 
-    # Reindex and reorder
     df_reindexed = df_conn.loc[valid_sensory_ids + other_ids, valid_sensory_ids + other_ids]
 
-    # Scale the matrix
     adj_matrix = df_reindexed.values * rescale_factor
 
     num_S = len(valid_sensory_ids)
@@ -116,30 +109,30 @@ def load_sio_connectivity_data(connectivity_path, annotation_path, rescale_facto
     print(f"After filtering, found {len(valid_output_ids)} output neurons in matrix")
     print(f"Remaining {len(valid_internal_ids)} neurons classified as internal")
 
-    adjacency = df_conn.values  # shape: [N, N]
-    ordered_ids = df_conn.index.tolist() 
-    id_to_idx = {nid: i for i, nid in enumerate(ordered_ids)}
+    # Create the SIO-ordered adjacency matrix
+    ordered_ids = valid_sensory_ids + valid_internal_ids + valid_output_ids
+    df_conn_sio = df_conn.loc[ordered_ids, ordered_ids]
+    adjacency = df_conn_sio.values * rescale_factor  # shape: [N, N]
 
-    sensory_idx = [id_to_idx[nid] for nid in valid_sensory_ids]
-    internal_idx = [id_to_idx[nid] for nid in valid_internal_ids]
-    output_idx = [id_to_idx[nid] for nid in valid_output_ids]
+    # Calculate indices for each group in the ISO-ordered matrix
+    num_sensory = len(valid_sensory_ids)
+    num_internal = len(valid_internal_ids)
+    num_output = len(valid_output_ids)
 
-    adjacency = adjacency * rescale_factor
+    W_ss = adjacency[:num_sensory, :num_sensory]
+    W_sr = adjacency[:num_sensory, num_sensory:num_sensory+num_internal]
+    W_so = adjacency[:num_sensory, num_sensory+num_internal:]
 
-    W_ss = adjacency[np.ix_(sensory_idx, sensory_idx)]
-    W_sr = adjacency[np.ix_(sensory_idx, internal_idx)]
-    W_so = adjacency[np.ix_(sensory_idx, output_idx)]
+    W_rs = adjacency[num_sensory:num_sensory+num_internal, :num_sensory]
+    W_rr = adjacency[num_sensory:num_sensory+num_internal, num_sensory:num_sensory+num_internal]
+    W_ro = adjacency[num_sensory:num_sensory+num_internal, num_sensory+num_internal:]
 
-    W_rs = adjacency[np.ix_(internal_idx, sensory_idx)]
-    W_rr = adjacency[np.ix_(internal_idx, internal_idx)]
-    W_ro = adjacency[np.ix_(internal_idx, output_idx)]
-
-    W_os = adjacency[np.ix_(output_idx, sensory_idx)]
-    W_or = adjacency[np.ix_(output_idx, internal_idx)]
-    W_oo = adjacency[np.ix_(output_idx, output_idx)]
+    W_os = adjacency[num_sensory+num_internal:, :num_sensory]
+    W_or = adjacency[num_sensory+num_internal:, num_sensory:num_sensory+num_internal]
+    W_oo = adjacency[num_sensory+num_internal:, num_sensory+num_internal:]
 
     return {
-        'W': adjacency,
+        'W': adjacency,  # Now in SIO order
         'W_ss': W_ss,
         'W_sr': W_sr,
         'W_so': W_so,
