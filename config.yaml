@@ -4,7 +4,7 @@ signed: true
 sio: true # sio: sensory-interneuron-output
 fewshot:
   enabled: true # options: true for  few-shot training, false for full training
-  samples: 600 # options: 60 for 1%, 120 for 2%, 300 for 5%, 600 for 10%
+  samples: 60 # options: 60 for 1%, 120 for 2%, 300 for 5%, 600 for 10%
   batch_size: 17
 num_trials: 10
 num_epochs: 10
@@ -36,11 +36,11 @@ experiments:
   #     rank: 8      # r parameter from LoRA paper
   #     alpha: 16    # alphax scaling factor
 
-  # # 2. unlearnable DPU
-  # Unlearnable_DPU:
-  #   type: basicrnn
-  #   trainable: false
-  #   init: droso
+  # 2. unlearnable DPU
+  Unlearnable_DPU:
+    type: basicrnn
+    trainable: false
+    init: droso
 
   # # 3. learnable RNN (maintaining the same sparsity, but not the same sparsity pattern)
   # Learnable_RNN_Same_Sparsity: 
@@ -70,7 +70,20 @@ experiments:
   #   type: basicrnn
   #   trainable: false
   #   init: random
-    
+
+  # # 7. Unlearnable MLP (3 hidden layer, same total weight as droso)
+  # Unlearnable_Threehidden_MLP:
+  #   type: threehiddenmlp
+  #   freeze: true
+
+  # # 8. Learnable MLP (3 hidden layer, same total weight as droso)
+  # Learnable_Threehidden_MLP:
+  #   type: threehiddenmlp
+  #   freeze: false
+
+  # ------------------------------------------------------------------------------------------------
+  # Initialization Experiments
+  # ------------------------------------------------------------------------------------------------
     
   # # 7. Learnable RNN with row-permuted initialization
   # Learnable_RNN_Row_Permuted:
@@ -86,52 +99,47 @@ experiments:
   #   trainable: false
   #   init: row_permuted
     
-  # 9. Learnable RNN with column-permuted initialization
-  Learnable_RNN_Col_Permuted:
-    type: basicrnn
-    trainable: true
-    init: col_permuted
-    pruning: true
-    lambda_l1: 0.0001
+  # # 9. Learnable RNN with column-permuted initialization
+  # Learnable_RNN_Col_Permuted:
+  #   type: basicrnn
+  #   trainable: true
+  #   init: col_permuted
+  #   pruning: true
+  #   lambda_l1: 0.0001
     
-  # 10. Unlearnable RNN with column-permuted initialization
-  Unlearnable_RNN_Col_Permuted:
-    type: basicrnn
-    trainable: false
-    init: col_permuted
+  # # 10. Unlearnable RNN with column-permuted initialization
+  # Unlearnable_RNN_Col_Permuted:
+  #   type: basicrnn
+  #   trainable: false
+  #   init: col_permuted
     
-  # 11. Learnable RNN with eigenvalue-matched initialization
-  Learnable_RNN_Eigenvalue_Matched:
-    type: basicrnn
-    trainable: true
-    init: eigenvalue_matched
-    pruning: true
-    lambda_l1: 0.0001
+  # # 11. Learnable RNN with eigenvalue-matched initialization
+  # Learnable_RNN_Eigenvalue_Matched:
+  #   type: basicrnn
+  #   trainable: true
+  #   init: eigenvalue_matched
+  #   pruning: true
+  #   lambda_l1: 0.0001
     
-  # 12. Unlearnable RNN with eigenvalue-matched initialization
-  Unlearnable_RNN_Eigenvalue_Matched:
-    type: basicrnn
-    trainable: false
-    init: eigenvalue_matched
+  # # 12. Unlearnable RNN with eigenvalue-matched initialization
+  # Unlearnable_RNN_Eigenvalue_Matched:
+  #   type: basicrnn
+  #   trainable: false
+  #   init: eigenvalue_matched
     
-  # 13. Learnable RNN with eigenvalue-permuted initialization
-  Learnable_RNN_Eigenvalue_Permuted:
-    type: basicrnn
-    trainable: true
-    init: eigenvalue_permuted
-    pruning: true
-    lambda_l1: 0.0001
+  # # 13. Learnable RNN with eigenvalue-permuted initialization
+  # Learnable_RNN_Eigenvalue_Permuted:
+  #   type: basicrnn
+  #   trainable: true
+  #   init: eigenvalue_permuted
+  #   pruning: true
+  #   lambda_l1: 0.0001
     
-  # 14. Unlearnable RNN with eigenvalue-permuted initialization
-  Unlearnable_RNN_Eigenvalue_Permuted:
-    type: basicrnn
-    trainable: false
-    init: eigenvalue_permuted
-
-  # # 7. Unlearnable MLP (3 hidden layer, same total weight as droso)
-  # Unlearnable_Threehidden_MLP:
-  #   type: threehiddenmlp
-  #   freeze: true
+  # # 14. Unlearnable RNN with eigenvalue-permuted initialization
+  # Unlearnable_RNN_Eigenvalue_Permuted:
+  #   type: basicrnn
+  #   trainable: false
+  #   init: eigenvalue_permuted
 
   # ------------------------------------------------------------------------------------------------
   # Sensory Type Experiments, using the same model as the main experiments, but with different sensory inputs, which includes:

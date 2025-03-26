@@ -76,7 +76,7 @@ def create_custom_legend():
     ]
     return legend_elements
 
-def plot_results(data, ax, selected_sample, global_y_max):
+def plot_results(data, ax, selected_sample, global_y_max, panel_position):
     x_max = 0
     max_acc = 0
     
@@ -108,22 +108,33 @@ def plot_results(data, ax, selected_sample, global_y_max):
             alpha=0.15
         )
     
-    # Set y-axis ticks
+    # Set y-axis ticks for all panels
     y_ticks = [0, 0.25, 0.5, 0.75, 1.0]
-    y_labels = [0, "", "", "", 1.0]
+    y_labels = [0, '', '', '', 1.0]
     
-    # Use global max for y-axis scaling
     ax.set_yticks(y_ticks)
     ax.set_yticklabels(y_labels, fontsize=32)
     
     # Set x-axis ticks
     x_ticks = [0, x_max/2, x_max]
-    ax.set_xticks(x_ticks)
-    ax.set_xticklabels([f"{x:.1f}" for x in x_ticks], fontsize=32)
     
-    # Set labels and title
-    ax.set_xlabel("Training Samples (1,000's)", fontsize=36)
-    ax.set_ylabel("Test Accuracy", fontsize=36)
+    x_labels = [f"{x:.1f}" for x in x_ticks]
+    
+    ax.set_xticks(x_ticks)
+    ax.set_xticklabels(x_labels, fontsize=32)
+    
+    # Set axis labels only for appropriate panels
+    if panel_position in ['C', 'D']:  # Only bottom panels have x-axis labels
+        ax.set_xlabel("Training Samples (1,000's)", fontsize=36)
+    else:
+        ax.set_xlabel("")
+        
+    if panel_position in ['A', 'C']:  # Only left panels have y-axis labels
+        ax.set_ylabel("Test Accuracy", fontsize=36)
+    else:
+        ax.set_ylabel("")
+    
+    # Set title for all panels
     samples_per_class = {"1%":60, "2%":120, "5%":300, "10%":600}[selected_sample]
     ax.set_title(f"{samples_per_class} samples per class", fontsize=40)
     
@@ -169,7 +180,10 @@ if __name__ == "__main__":
     
     # Plot each panel with consistent y-axis scaling
     for idx, sample in enumerate(SELECTED_SAMPLES):
-        plot_results(all_data[sample], axes[idx], sample, global_y_max)
+        plot_results(all_data[sample], axes[idx], sample, global_y_max, panel_labels[idx])
+    
+    # Adjust spacing between subplots
+    plt.tight_layout()
     
     # Add legend to the bottom of the figure
     legend = fig.legend(
@@ -179,10 +193,7 @@ if __name__ == "__main__":
         ncol=4,
         frameon=False,
         fontsize=32,
-        handlelength=3,
-        handleheight=3,
     )
     
-    plt.tight_layout()
     plt.savefig("./figures/performance_curve.pdf", bbox_inches="tight")
     plt.show()
