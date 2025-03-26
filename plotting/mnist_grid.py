@@ -125,7 +125,8 @@ def create_visualization(results):
         # Make column label larger (similar to digit size)
         axes[0, col].text(0.5, 1.3, f"{pred_digit}", 
                          ha='center', va='center', 
-                         fontsize=32, fontweight='bold', 
+                         fontsize=48,
+                        #  fontweight='bold', 
                          transform=axes[0, col].transAxes)
         
         # Mix correct and incorrect examples, prioritizing incorrect
@@ -160,7 +161,7 @@ def create_visualization(results):
                 
                 # Add red circle around misclassified examples
                 if not example['correct']:
-                    rect = patches.Rectangle((0, 0), 28, 28, linewidth=3, edgecolor='red', facecolor='none')
+                    rect = patches.Rectangle((0, 0), 28, 28, linewidth=5, edgecolor='red', facecolor='none')
                     ax.add_patch(rect)
             else:
                 # Empty gray square for empty slots
@@ -172,7 +173,8 @@ def create_visualization(results):
 
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = load_model(os.path.join(result_path, "models/Unlearnable_DPU_trial1.model.pkl")).to(device)
+    # model = load_model(os.path.join(result_path, "models/Unlearnable_DPU_trial1.model.pkl")).to(device)
+    model = load_model(os.path.join(result_path, "models/DPU_LoRA_trial1.model.pkl")).to(device)
     # Load model and data
     dataset = get_mnist_data()
 
