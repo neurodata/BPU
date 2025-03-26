@@ -15,11 +15,13 @@ def normalize_matrix(W, mode=None):
         return W
         
     if mode == 'minmax':
-        return (W - np.min(W)) / (np.max(W) - np.min(W))
+        min_val = np.min(np.abs(W))
+        max_val = np.max(np.abs(W))
+        return (W - min_val) / (max_val - min_val)
     elif mode == 'clip':
         # Use 10th and 90th percentiles as clip range
-        min_val = np.percentile(W, 10)
-        max_val = np.percentile(W, 90)
+        min_val = np.percentile(np.abs(W), 10)
+        max_val = np.percentile(np.abs(W), 90)
         W = np.clip(W, min_val, max_val)
         return (W - min_val) / (max_val - min_val)  # Normalize to [0,1]
     else:
@@ -78,12 +80,14 @@ def get_weight_matrix(base, mode):
     elif mode == 'row_permuted':
         # Randomly permute rows while preserving column structure
         row_indices = np.random.permutation(base.shape[0])
-        return base[row_indices, :]
+        # Make a copy to ensure contiguity in memory
+        return base[row_indices, :].copy()
         
     elif mode == 'col_permuted':
         # Randomly permute columns while preserving row structure
         col_indices = np.random.permutation(base.shape[1])
-        return base[:, col_indices]
+        # Make a copy to ensure contiguity in memory
+        return base[:, col_indices].copy()
         
     elif mode == 'eigenvalue_matched':
         # Get eigenvalue distribution of base matrix
@@ -106,7 +110,8 @@ def get_weight_matrix(base, mode):
         # the original matrix from just eigenvalues
         U, _ = np.linalg.qr(random_matrix)
         D = np.diag(scaled_eigenvalues)
-        return U @ D @ U.T
+        result = U @ D @ U.T
+        return result.astype(np.float32).copy()  # Ensure contiguity
         
     elif mode == 'eigenvalue_permuted':
         # Get eigenvalue distribution of base matrix
@@ -139,7 +144,8 @@ def get_weight_matrix(base, mode):
         reconstructed_magnitude = np.mean(np.abs(reconstructed))
         scaling_factor = orig_magnitude / reconstructed_magnitude
         
-        return (reconstructed * scaling_factor).astype(np.float32)
+        # Return a contiguous array
+        return (reconstructed * scaling_factor).astype(np.float32).copy()
         
     else:
         raise ValueError(f"Unknown mode: {mode}")

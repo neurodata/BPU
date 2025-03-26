@@ -190,7 +190,9 @@ class BasicRNN(nn.Module):
             if self.target_nonzeros is None:
                 return
                 
-            W_flat = self.W.view(-1)
+            # Use reshape(-1) instead of view(-1) to handle non-contiguous tensors
+            # This makes it work with column-permuted and other non-contiguous initializations
+            W_flat = self.W.reshape(-1)
             numel = W_flat.numel()
             
             values, indices = torch.sort(W_flat.abs(), descending=True)

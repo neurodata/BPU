@@ -208,7 +208,7 @@ def train_experiment(exp_id, config, trial_num):
     print("========================================\n")
     
     torch.manual_seed(trial_num)
-    np.random.seed()
+    np.random.seed(trial_num)
     
     data_loader = DataLoader(batch_size=batch_size)
     full_train_set, test_loader = data_loader.load_data()
