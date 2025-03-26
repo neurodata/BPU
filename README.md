@@ -2,9 +2,6 @@
 
 This repository implements a novel neural network architecture that incorporates the Drosophila larva connectome ([DOI: 10.1126/science.add9330](https://doi.org/10.1126/science.add9330)) as a recurrent neural network (RNN) layer and tests its performance on the MNIST dataset.
 
-## Overview
-
-We transform the complete neuronal wiring diagram of the Drosophila larva brain into a recurrent neural network weight matrix. This biological weight initialization method is compared against traditional artificial neural networks on image classification tasks.
 
 ## Requirements
 
