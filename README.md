@@ -28,7 +28,7 @@ BPU/
 │   ├── data_loader.py   # Data loading and preprocessing
 │   ├── net.py           # Neural network model definitions
 │   └── utils.py         # Utility functions
-└── config.yaml          # Configuration file for experiments
+├── config/              # Configuration file for experiments
 ```
 
 ## Getting Started

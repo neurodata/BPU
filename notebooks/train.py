@@ -15,7 +15,7 @@ from data_loader import DataLoader
 from utils import get_weight_matrix
 
 # Load config
-with open("../config.yaml", "r") as f:
+with open("../config/config.yaml", "r") as f:
     config_data = yaml.safe_load(f)
 
 # Global parameters

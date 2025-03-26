@@ -1,0 +1,21 @@
+annotation_path: ../data/science.add9330_data_s2.csv
+batch_size: 64
+csv_paths:
+  signed: ../data/signed_connectivity_matrix.csv
+  unsigned: ../data/ad_connectivity_matrix.csv
+experiments:
+  Unlearnable_DPU:
+    init: droso
+    trainable: false
+    type: basicrnn
+fewshot:
+  batch_size: 17
+  enabled: true
+  samples: 60
+learning_rate: 0.001
+num_epochs: 5
+num_trials: 1
+rescale_factor: 0.04
+result_path: ../results
+signed: true
+sio: true
