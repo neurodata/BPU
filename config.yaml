@@ -1,45 +1,52 @@
 # Global configuration
+result_path: "../results"  # Path to save results and models
 signed: true
 sio: true # sio: sensory-interneuron-output
 fewshot:
-  enabled: false
-  samples: 300
+  enabled: true # options: true for  few-shot training, false for full training
+  samples: 60 # options: 60 for 1%, 120 for 2%, 300 for 5%, 600 for 10%
   batch_size: 17
-num_trials: 10
+num_trials: 1
 num_epochs: 10
 batch_size: 64
 learning_rate: 0.001
 
 # Paths for connectivity data
 csv_paths:
-  signed: "./data/signed_connectivity_matrix.csv"
-  unsigned: "./data/ad_connectivity_matrix.csv"
-annotation_path: "./data/science.add9330_data_s2.csv"
+  signed: "../data/signed_connectivity_matrix.csv"
+  unsigned: "../data/ad_connectivity_matrix.csv"
+annotation_path: "../data/science.add9330_data_s2.csv"
 rescale_factor: 0.04
+# Matrix normalization settings
+# normalization: "minmax"  # Options: "minmax", "clip", or None (no normalization)
 
 # Experiment definitions
 experiments:  
-  # 1. DPU-LORA: rather than fine-tuning the DPU, do the LORA thing, where we literally add a low-rank matrix to it
-  DPU_LoRA:
-    type: basicrnn
-    trainable: false  # Keep DPU weights frozen
-    init: droso
-    lora:
-      enabled: true
-      rank: 8      # r parameter from LoRA paper
-      alpha: 16    # alpha scaling factor
+  # ------------------------------------------------------------------------------------------------
+  # Main Experiments
+  # ------------------------------------------------------------------------------------------------
 
-  # # 2. unlearnable DPU
-  # Unlearnable_DPU:
+  # # 1. DPU-LORA: rather than fine-tuning the DPU, do the LORA thing, where we literally add a low-rank matrix to it
+  # DPU_LoRA:
   #   type: basicrnn
-  #   trainable: false
+  #   trainable: false  # Keep DPU weights frozen
   #   init: droso
+  #   lora:
+  #     enabled: true
+  #     rank: 8      # r parameter from LoRA paper
+  #     alpha: 16    # alphax scaling factor
+
+  # 2. unlearnable DPU
+  Unlearnable_DPU:
+    type: basicrnn
+    trainable: false
+    init: droso
 
   # # 3. learnable RNN (maintaining the same sparsity, but not the same sparsity pattern)
   # Learnable_RNN_Same_Sparsity: 
   #   type: basicrnn
   #   trainable: true
-  #   init: permuted_droso
+  #   init: permuted
   #   trainable: true
   #   pruning: true
   #   lambda_l1: 0.0001
@@ -47,7 +54,7 @@ experiments:
   # # 4. unlearnable RNN (maintaining the same sparsity, but not the same sparsity pattern)
   # Unlearnable_RNN_Same_Sparsity:
   #   type: basicrnn
-  #   init: permuted_droso
+  #   init: permuted
   #   trainable: false
   #   pruning: false
 
@@ -63,12 +70,64 @@ experiments:
   #   trainable: false
   #   init: random
 
-  # # 10. Unlearnable MLP (3 hidden layer, same total weight as droso)
+  # # 7. Unlearnable MLP (3 hidden layer, same total weight as droso)
   # Unlearnable_Threehidden_MLP:
   #   type: threehiddenmlp
   #   freeze: true
 
-  # # 11. learnable MLP (3 hidden layer, same total weight as droso)  
+  # # 8. learnable MLP (3 hidden layer, same total weight as droso)  
   # Learnable_Threehidden_MLP:
   #   type: threehiddenmlp
   #   freeze: false
+
+  # ------------------------------------------------------------------------------------------------
+  # Sensory Type Experiments, using the same model as the main experiments, but with different sensory inputs, which includes:
+  # 1. olfactory
+  # 2. visual
+  # 3. gut
+  # 4. respiratory
+  # 5. gustatory-external
+  # 6. all
+  # ------------------------------------------------------------------------------------------------
+
+  # # Olfactory Sensory Input
+  # Unlearnable_Olfactory_DPU:
+  #   type: basicrnn
+  #   trainable: false
+  #   init: droso
+  #   sensory_type: olfactory
+
+  # # Visual Sensory Input
+  # Unlearnable_Visual_DPU:
+  #   type: basicrnn
+  #   trainable: false
+  #   init: droso
+  #   sensory_type: visual
+
+  # # Gut Sensory Input
+  # Unlearnable_Gut_DPU:
+  #   type: basicrnn
+  #   trainable: false
+  #   init: droso
+  #   sensory_type: gut
+
+  # # Respiratory Sensory Input
+  # Unlearnable_Respiratory_DPU:
+  #   type: basicrnn
+  #   trainable: false
+  #   init: droso
+  #   sensory_type: respiratory
+
+  # # Gustatory-external Sensory Input
+  # Unlearnable_Gustatory_DPU:
+  #   type: basicrnn
+  #   trainable: false
+  #   init: droso
+  #   sensory_type: gustatory-external
+
+  # # All Sensory Inputs
+  # Unlearnable_All_Sensory_DPU:
+  #   type: basicrnn
+  #   trainable: false
+  #   init: droso
+  #   sensory_type: all

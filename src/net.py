@@ -204,87 +204,109 @@ class BasicRNN(nn.Module):
 
     def save_model(self, path, filename, metadata=None):
         """
-        Save model to pickle file with optional metadata
+        Save model and its configuration to a file.
         
-        Args:
-            path: Directory to save model to
-            filename: Filename to save model as
-            metadata: Optional dictionary of metadata to save with model
+        Parameters:
+        -----------
+        path : str
+            Directory to save the model
+        filename : str
+            Base filename to use for saving
+        metadata : dict, optional
+            Additional metadata to save
         """
+        # Create the directory if it doesn't exist
         os.makedirs(path, exist_ok=True)
-        full_path = os.path.join(path, filename)
         
-        # Prepare model state and metadata
-        save_dict = {
-            'model_state': self.state_dict(),
-            'config': {
-                'sensory_dim': self.sensory_dim,
-                'internal_dim': self.internal_dim,
-                'output_dim': self.output_dim,
-                'use_lora': self.use_lora,
-                'lora_rank': self.lora_rank if hasattr(self, 'lora_rank') else None,
-                'lora_alpha': self.lora_alpha if hasattr(self, 'lora_alpha') else None,
-            }
+        # Save model state
+        torch.save(self.state_dict(), os.path.join(path, f'{filename}.pt'))
+        
+        # Save model configuration
+        config = {
+            'input_dim': self.input_proj.in_features,
+            'sensory_dim': self.sensory_dim,
+            'internal_dim': self.internal_dim,
+            'output_dim': self.output_dim,
+            'num_classes': self.output_layer.out_features,
+            'W_init': self.W_init.cpu().numpy(),
+            'trainable': isinstance(self.W, nn.Parameter),
+            'pruning': self.pruning,
+            'target_nonzeros': self.target_nonzeros,
+            'lambda_l1': self.lambda_l1,
+            'use_lora': self.use_lora,
+            'lora_rank': getattr(self, 'lora_rank', 8),
+            'lora_alpha': getattr(self, 'lora_alpha', 16),
+            'sensory_type': getattr(self, 'sensory_type', 'visual')
         }
         
-        # Add optional metadata if provided
-        if metadata is not None:
-            save_dict['metadata'] = metadata
+        with open(os.path.join(path, 'model_config.pkl'), 'wb') as f:
+            pickle.dump(config, f)
             
-        # Save to pickle file
-        with open(full_path, 'wb') as f:
-            pickle.dump(save_dict, f)
-            
-        return full_path
-        
+        # Save additional metadata if provided
+        if metadata:
+            with open(os.path.join(path, 'metadata.pkl'), 'wb') as f:
+                pickle.dump(metadata, f)
+
     @classmethod
     def load_model(cls, path, device=None):
         """
-        Load model from pickle file
-        
-        Args:
-            path: Path to saved model file
-            device: Device to load model to (e.g. 'cpu' or 'cuda')
-            
-        Returns:
-            Loaded model instance
+        Load a saved model from a directory.
         """
-        if device is None:
-            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        # Load model configuration
+        with open(os.path.join(path, 'model_config.pkl'), 'rb') as f:
+            config = pickle.load(f)
             
-        # Load from pickle file
-        with open(path, 'rb') as f:
-            save_dict = pickle.load(f)
+        # Update device if provided
+        if device:
+            config['device'] = device
             
-        # Extract config and state dict
-        config = save_dict['config']
-        state_dict = save_dict['model_state']
+        # Extract parameters
+        input_dim = config.get('input_dim')
+        sensory_dim = config.get('sensory_dim')
+        internal_dim = config.get('internal_dim')
+        output_dim = config.get('output_dim')
+        num_classes = config.get('num_classes')
+        W_init = config.get('W_init')
+        trainable = config.get('trainable', False)
+        pruning = config.get('pruning', False)
+        target_nonzeros = config.get('target_nonzeros', None)
+        lambda_l1 = config.get('lambda_l1', 1e-4)
+        device = config.get('device', 'cpu')
+        use_lora = config.get('use_lora', False)
+        lora_rank = config.get('lora_rank', 8)
+        lora_alpha = config.get('lora_alpha', 16)
+        sensory_type = config.get('sensory_type', 'visual')
         
-        # Get W_init from state dict
-        W_init = state_dict['W_init'].cpu().numpy()
-        
-        # Create new model instance
+        # Create a new instance with the loaded parameters
         model = cls(
             W_init=W_init,
-            input_dim=state_dict['input_proj.weight'].shape[1],  # Get from input projection weight
-            sensory_dim=config['sensory_dim'],
-            internal_dim=config['internal_dim'],
-            output_dim=config['output_dim'],
-            num_classes=state_dict['output_layer.weight'].shape[0],  # Get from output layer weight
-            use_lora=config['use_lora'],
-            lora_rank=config.get('lora_rank', 8),
-            lora_alpha=config.get('lora_alpha', 16),
+            input_dim=input_dim,
+            sensory_dim=sensory_dim,
+            internal_dim=internal_dim,
+            output_dim=output_dim,
+            num_classes=num_classes,
+            trainable=trainable,
+            pruning=pruning,
+            target_nonzeros=target_nonzeros,
+            lambda_l1=lambda_l1,
+            use_lora=use_lora,
+            lora_rank=lora_rank,
+            lora_alpha=lora_alpha,
+            sensory_type=sensory_type
         )
         
-        # Load state dict
-        model.load_state_dict(state_dict)
+        # Load the model state
+        model.load_state_dict(torch.load(os.path.join(path, 'model.pt'), map_location=device))
         model.to(device)
         
-        # Add metadata if available
-        if 'metadata' in save_dict:
-            model.metadata = save_dict['metadata']
-            
-        return model
+        # Load additional metadata if available
+        metadata_path = os.path.join(path, 'metadata.pkl')
+        metadata = None
+        if os.path.exists(metadata_path):
+            with open(metadata_path, 'rb') as f:
+                metadata = pickle.load(f)
+                
+        return model, metadata
 
 class ThreeHiddenMLP(nn.Module):
     def __init__(self, input_size=784, hidden1_size=29, hidden2_size=147, hidden3_size=400, output_size=10, 
