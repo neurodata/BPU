@@ -19,6 +19,7 @@ class BasicRNN(nn.Module):
                  use_lora: bool = False,
                  lora_rank: int = 8,
                  lora_alpha: float = 16,
+                 dropout_rate: float = 0.2,
                  ):
         """
         Unifies W_ss, W_sr, W_rs, W_rr, W_ro, W_or, W_so, W_oo, W_os into one
@@ -28,10 +29,14 @@ class BasicRNN(nn.Module):
         - use_lora: Whether to use LoRA adaptation
         - lora_rank: Rank of the LoRA matrices (r in the paper)
         - lora_alpha: Scaling factor for LoRA (alpha in the paper)
+        
+        Regularization parameters:
+        - dropout_rate: Rate for dropout applied to the input layer
         """
         super().__init__()
         print(f"BasicRNN init: trainable={trainable}, pruning={pruning}, target_nonzeros={target_nonzeros}, lambda_l1={lambda_l1}")
         print(f"LoRA config: use_lora={use_lora}, rank={lora_rank}, alpha={lora_alpha}")
+        print(f"Regularization: dropout_rate={dropout_rate}")
         
         self.sensory_dim = sensory_dim
         self.internal_dim = internal_dim
@@ -79,6 +84,9 @@ class BasicRNN(nn.Module):
         self.input_proj = nn.Linear(input_dim, sensory_dim)
         self.output_layer = nn.Linear(output_dim, num_classes)
         self.activation = nn.ReLU()
+        
+        # Dropout layer for regularization
+        self.dropout = nn.Dropout(dropout_rate)
 
     def get_effective_W(self):
         """Get the effective weight matrix including LoRA if enabled"""
@@ -131,7 +139,7 @@ class BasicRNN(nn.Module):
             'new_nonzeros': new_nonzeros.item()
         }
 
-    def forward(self, x, time_steps=10):
+    def forward(self, x, time_steps=2):
         """
         Forward pass with states S, I, O. We slice the effective W into sub-blocks:
           W_ss, W_sr, W_so, W_rs, W_rr, W_ro, W_os, W_or, W_oo
@@ -159,12 +167,12 @@ class BasicRNN(nn.Module):
         I_state = torch.zeros(batch_size, I, device=device)
         O_state = torch.zeros(batch_size, O, device=device)
 
-        # Input projection
-        E = self.input_proj(x)
+        # Input projection with dropout
+        E = self.dropout(self.input_proj(x))
 
         for t in range(time_steps):
-            # Optionally only inject input every 5 steps
-            E_t = E if (t % 5 == 0) else torch.zeros_like(E)
+            # Optionally only inject input every 2 steps
+            E_t = E if (t % 2 == 0) else torch.zeros_like(E)
 
             S_next = self.activation(
                 S_state @ W_ss + E_t + I_state @ W_rs + O_state @ W_os
@@ -177,7 +185,7 @@ class BasicRNN(nn.Module):
             )
 
             S_state, I_state, O_state = S_next, I_next, O_next
-
+            
         return self.output_layer(O_state)
 
     def get_l1_loss(self):
@@ -238,7 +246,8 @@ class BasicRNN(nn.Module):
             'use_lora': self.use_lora,
             'lora_rank': getattr(self, 'lora_rank', 8),
             'lora_alpha': getattr(self, 'lora_alpha', 16),
-            'sensory_type': getattr(self, 'sensory_type', 'visual')
+            'sensory_type': getattr(self, 'sensory_type', 'visual'),
+            'dropout_rate': getattr(self, 'dropout', nn.Dropout(0.2)).p
         }
         
         with open(os.path.join(path, 'model_config.pkl'), 'wb') as f:
@@ -278,6 +287,7 @@ class BasicRNN(nn.Module):
         lora_rank = config.get('lora_rank', 8)
         lora_alpha = config.get('lora_alpha', 16)
         sensory_type = config.get('sensory_type', 'visual')
+        dropout_rate = config.get('dropout_rate', 0.2)
         
         # Create a new instance with the loaded parameters
         model = cls(
@@ -294,7 +304,8 @@ class BasicRNN(nn.Module):
             use_lora=use_lora,
             lora_rank=lora_rank,
             lora_alpha=lora_alpha,
-            sensory_type=sensory_type
+            sensory_type=sensory_type,
+            dropout_rate=dropout_rate
         )
         
         # Load the model state

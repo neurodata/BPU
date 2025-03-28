@@ -4,9 +4,9 @@ signed: true
 sio: true # sio: sensory-interneuron-output
 fewshot:
   enabled: true # options: true for  few-shot training, false for full training
-  samples: 60 # options: 60 for 1%, 120 for 2%, 300 for 5%, 600 for 10%
+  samples: 600 # options: 60 for 1%, 120 for 2%, 300 for 5%, 600 for 10%
   batch_size: 17
-num_trials: 10
+num_trials: 5
 num_epochs: 10
 batch_size: 64
 learning_rate: 0.001
@@ -36,11 +36,11 @@ experiments:
   #     rank: 8      # r parameter from LoRA paper
   #     alpha: 16    # alphax scaling factor
 
-  # 2. unlearnable DPU
-  Unlearnable_DPU:
-    type: basicrnn
-    trainable: false
-    init: droso
+  # # 2. unlearnable DPU
+  # Unlearnable_DPU:
+  #   type: basicrnn
+  #   trainable: false
+  #   init: droso
 
   # # 3. learnable RNN (maintaining the same sparsity, but not the same sparsity pattern)
   # Learnable_RNN_Same_Sparsity: 
@@ -80,6 +80,39 @@ experiments:
   # Learnable_Threehidden_MLP:
   #   type: threehiddenmlp
   #   freeze: false
+
+  # ------------------------------------------------------------------------------------------------
+  # Accuracy Leveraging Experiments
+  # ------------------------------------------------------------------------------------------------
+
+  # DPU_LoRA_Accuracy_Leveraging:
+  #   type: basicrnn
+  #   trainable: false  # Keep DPU weights frozen
+  #   init: droso
+  #   lora:
+  #     enabled: true
+  #     rank: 8      # r parameter from LoRA paper
+  #     alpha: 16    # alphax scaling factor
+  #   sensory_type: all
+
+  Unlearnable_DPU_Accuracy_Leveraging:
+    type: basicrnn
+    trainable: false
+    init: droso
+    sensory_type: all
+    
+  Unlearnable_RNN_Same_Sparsity_Accuracy_Leveraging:
+    type: basicrnn
+    init: permuted
+    trainable: false
+    pruning: false
+    sensory_type: all
+
+  Unlearnable_RNN_No_Sparsity_Accuracy_Leveraging:
+    type: basicrnn
+    trainable: false
+    init: random
+    sensory_type: all
 
   # ------------------------------------------------------------------------------------------------
   # Initialization Experiments

@@ -108,40 +108,41 @@ def plot_results(data, ax, selected_sample, global_y_max, panel_position):
             alpha=0.15
         )
     
-    # Set y-axis ticks for all panels
-    y_ticks = [0, 0.25, 0.5, 0.75, 1.0]
-    y_labels = [0, '', '', '', 1.0]
+    # Add max accuracy line
+    rounded_max_acc = round(max_acc, 2)
+    ax.axhline(y=rounded_max_acc, color='gray', linestyle='--', alpha=0.7)
     
+    # Set y-axis ticks for all panels including the max value
+    y_ticks = [0, rounded_max_acc, 1.0]
+    # Adjust label positioning to avoid overlap
+    y_labels = ['0', f'{rounded_max_acc}', '']
+    ax.set_ylim(0, 1)  
     ax.set_yticks(y_ticks)
-    ax.set_yticklabels(y_labels, fontsize=32)
+    ax.set_yticklabels(y_labels, fontsize=36)
     
     # Set x-axis ticks
     x_ticks = [0, x_max/2, x_max]
-    
-    x_labels = [f"{x:.1f}" for x in x_ticks]
+    x_labels = [f"{int(x)}" for x in x_ticks]  # Remove decimal places
     
     ax.set_xticks(x_ticks)
     ax.set_xticklabels(x_labels, fontsize=32)
     
     # Set axis labels only for appropriate panels
-    if panel_position in ['C', 'D']:  # Only bottom panels have x-axis labels
-        ax.set_xlabel("Training Samples (1,000's)", fontsize=36)
-    else:
-        ax.set_xlabel("")
+    ax.set_xlabel("Training Samples (1,000's)", fontsize=32)
         
-    if panel_position in ['A', 'C']:  # Only left panels have y-axis labels
-        ax.set_ylabel("Test Accuracy", fontsize=36)
+    if panel_position == 'A':  # Only first panel has y-axis label
+        ax.set_ylabel("Test Accuracy", fontsize=32)
     else:
         ax.set_ylabel("")
     
-    # Set title for all panels
-    samples_per_class = {"1%":60, "2%":120, "5%":300, "10%":600}[selected_sample]
-    ax.set_title(f"{samples_per_class} samples per class", fontsize=40)
+    # Set title for all panels with panel letter integrated
+    target_samples = {"1%":60, "2%":120, "5%":300, "10%":600}[selected_sample]
+    ax.set_title(f"{panel_position}. {target_samples*10} samples per epoch", fontsize=36, pad=20)  # Increased padding
     
     # Set limits and grid
     ax.set_xlim(0, x_max*1.0)
-    ax.set_ylim(0, global_y_max)
-    ax.grid(True, alpha=0.3)
+    # ax.set_ylim(0, global_y_max)
+    ax.grid(True, axis='y', alpha=0.3)  # Only horizontal grid lines
     
     # Make tick marks thicker
     ax.tick_params(width=2, length=10)
@@ -149,10 +150,9 @@ def plot_results(data, ax, selected_sample, global_y_max, panel_position):
     return max_acc
 
 if __name__ == "__main__":
-    # Create a 2x2 subplot figure
+    # Create a 1x4 subplot figure instead of 2x2
     plt.rcParams['axes.linewidth'] = 2.0  # Make all axis lines thicker
-    fig, axes = plt.subplots(2, 2, figsize=(20, 20))
-    axes = axes.flatten()
+    fig, axes = plt.subplots(1, 4, figsize=(30, 8))  # Changed to 1x4 with wider figure
     
     # First, collect all data and determine global max y-value
     all_data = {}
@@ -173,23 +173,20 @@ if __name__ == "__main__":
     # Use a consistent y-axis scaling with a bit of padding
     global_y_max = max(1.0, global_max_acc * 1.1)
     
-    # Add panel labels
-    panel_labels = ['A', 'B', 'C', 'D']
-    for ax, label in zip(axes, panel_labels):
-        ax.text(-0.1, 1.1, label, transform=ax.transAxes, fontsize=48, fontweight='bold')
-    
     # Plot each panel with consistent y-axis scaling
+    panel_labels = ['A', 'B', 'C', 'D']
     for idx, sample in enumerate(SELECTED_SAMPLES):
         plot_results(all_data[sample], axes[idx], sample, global_y_max, panel_labels[idx])
     
-    # Adjust spacing between subplots
+    # Adjust spacing between subplots - increase horizontal space
+    plt.subplots_adjust(wspace=0.25)  # Space between panels horizontally
     plt.tight_layout()
     
     # Add legend to the bottom of the figure
     legend = fig.legend(
         handles=create_custom_legend(),
         loc="center",
-        bbox_to_anchor=(0.5, -0.07),
+        bbox_to_anchor=(0.5, -0.15),  # Adjusted position for 1x4 layout
         ncol=4,
         frameon=False,
         fontsize=32,
