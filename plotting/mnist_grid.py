@@ -10,7 +10,7 @@ from tqdm import tqdm
 import yaml
 
 # Load config
-with open("../config.yaml", "r") as f:
+with open("../config/config.yaml", "r") as f:
     config_data = yaml.safe_load(f)
 result_path = config_data.get("result_path", "../results")
 
@@ -173,8 +173,8 @@ def create_visualization(results):
 
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # model = load_model(os.path.join(result_path, "models/Unlearnable_DPU_trial1.model.pkl")).to(device)
-    model = load_model(os.path.join(result_path, "models/DPU_LoRA_trial1.model.pkl")).to(device)
+    model = load_model(os.path.join(result_path, "models/Unlearnable_DPU_trial1.model.pkl")).to(device)
+    # model = load_model(os.path.join(result_path, "models/DPU_LoRA_trial1.model.pkl")).to(device)
     # Load model and data
     dataset = get_mnist_data()
 

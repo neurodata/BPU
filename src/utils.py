@@ -42,6 +42,8 @@ def get_weight_matrix(base, mode):
             - 'col_permuted': Randomly permute columns of base matrix
             - 'eigenvalue_matched': Random matrix matching eigenvalue distribution
             - 'eigenvalue_permuted': Matrix with same eigenvalue distribution by permuting/discarding values
+            - 'spectrum_sparsity_matched': Random matrix with same eigenvalue spectrum and sparsity level
+            - 'low_rank_approximation': Low-rank approximation preserving 99% variance
     
     Returns:
         np.ndarray: Generated weight matrix
@@ -146,6 +148,37 @@ def get_weight_matrix(base, mode):
         
         # Return a contiguous array
         return (reconstructed * scaling_factor).astype(np.float32).copy()
-        
+    
+    elif mode == 'low_rank_approximation':
+        # Perform SVD decomposition
+        U, s, Vt = np.linalg.svd(base, full_matrices=False)
+
+        # Compute cumulative variance
+        explained_variance = np.cumsum(s**2) / np.sum(s**2)
+        n_components = np.argmax(explained_variance >= 0.99) + 1
+
+        # Reconstruct with top-k components
+        U_k = U[:, :n_components]
+        S_k = np.diag(s[:n_components])
+        Vt_k = Vt[:n_components, :]
+        low_rank_matrix = U_k @ S_k @ Vt_k
+
+        return low_rank_matrix.astype(np.float32).copy()
+    
+    elif mode == 'random_structure_same_spectrum':
+        # First compute the number of components needed
+        U, s, Vt = np.linalg.svd(base, full_matrices=False)
+        explained_variance = np.cumsum(s**2) / np.sum(s**2)
+        n_components = np.argmax(explained_variance >= 0.99) + 1
+        S_k = np.diag(s[:n_components])
+        n = base.shape[0]
+
+        # Generate random orthogonal structure
+        U_rand, _ = np.linalg.qr(np.random.randn(n, n))
+        V_rand, _ = np.linalg.qr(np.random.randn(n, n))
+        random_structure_matrix = U_rand[:, :n_components] @ S_k @ V_rand[:, :n_components].T
+
+        return random_structure_matrix.astype(np.float32).copy()
+    
     else:
         raise ValueError(f"Unknown mode: {mode}")

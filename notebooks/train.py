@@ -70,6 +70,7 @@ def initialize_model(config):
         use_lora = lora_config.get('enabled', False)
         lora_rank = lora_config.get('rank', 8)
         lora_alpha = lora_config.get('alpha', 16)
+        dropout_rate = config.get('dropout_rate', 0.2)
 
         return BasicRNN(
             W_init=W_init,
@@ -84,10 +85,20 @@ def initialize_model(config):
             lambda_l1=config.get('lambda_l1'),
             use_lora=use_lora,
             lora_rank=lora_rank,
-            lora_alpha=lora_alpha
+            lora_alpha=lora_alpha,
+            dropout_rate=dropout_rate,
         )   
     elif config['type'] == 'threehiddenmlp':
         return ThreeHiddenMLP(784, 29, 147, 400, 10, config.get('freeze', False))
+    elif config['type'] == 'twohiddenmlp':
+        return TwoHiddenMLP(
+            input_size=784, 
+            hidden1_size=352, 
+            hidden2_size=352, 
+            output_size=10, 
+            freeze=config.get('freeze', False),
+            use_weight_clipping=config.get('use_weight_clipping', True)
+        )
     else:
         raise ValueError(f"Unknown model type: {config['type']}")
 
@@ -102,7 +113,7 @@ def train_epoch(model, optimizer, criterion, train_loader):
 
         output = model(data)
 
-        if model.pruning:
+        if hasattr(model, "pruning") and model.pruning:
             logits = model(data)
             ce_loss = F.cross_entropy(logits, target)
             l1_loss = model.lambda_l1 * model.get_l1_loss() if model.lambda_l1 is not None else 0
@@ -117,7 +128,7 @@ def train_epoch(model, optimizer, criterion, train_loader):
         train_acc = correct / total if total else 0
         pbar.set_postfix(loss=f"{loss.item():.4f}", train_acc=f"{train_acc:.2%}")
     
-    if hasattr(model, "enforce_sparsity") and model.pruning:
+    if hasattr(model, "enforce_sparsity") and hasattr(model, "pruning") and model.pruning:
         print("enforce sparsity start, nonzeros: ", torch.count_nonzero(model.W).item())
         model.enforce_sparsity()
         print("enforce sparsity end, nonzeros: ", torch.count_nonzero(model.W).item())

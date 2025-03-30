@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import os
+import math
 import pickle
-
 class BasicRNN(nn.Module):
     def __init__(self, 
                  W_init,
@@ -34,6 +34,7 @@ class BasicRNN(nn.Module):
         - dropout_rate: Rate for dropout applied to the input layer
         """
         super().__init__()
+        
         print(f"BasicRNN init: trainable={trainable}, pruning={pruning}, target_nonzeros={target_nonzeros}, lambda_l1={lambda_l1}")
         print(f"LoRA config: use_lora={use_lora}, rank={lora_rank}, alpha={lora_alpha}")
         print(f"Regularization: dropout_rate={dropout_rate}")
@@ -42,7 +43,7 @@ class BasicRNN(nn.Module):
         self.internal_dim = internal_dim
         self.output_dim = output_dim
         self.total_dim = sensory_dim + internal_dim + output_dim
-
+        
         self.pruning = pruning
         self.lambda_l1 = lambda_l1
         self.target_nonzeros = target_nonzeros
@@ -79,7 +80,7 @@ class BasicRNN(nn.Module):
             # Initialize B with first r singular vectors
             self.lora_B.data.copy_(torch.sqrt(S[:lora_rank].unsqueeze(1)) * V[:, :lora_rank].t())
             # Scale B to make initial LoRA contribution small
-            self.lora_B.data.mul_(0.01)
+            self.lora_B.data.mul_(2.0)
 
         self.input_proj = nn.Linear(input_dim, sensory_dim)
         self.output_layer = nn.Linear(output_dim, num_classes)
@@ -87,7 +88,7 @@ class BasicRNN(nn.Module):
         
         # Dropout layer for regularization
         self.dropout = nn.Dropout(dropout_rate)
-
+    
     def get_effective_W(self):
         """Get the effective weight matrix including LoRA if enabled"""
         if not self.use_lora:
@@ -101,7 +102,6 @@ class BasicRNN(nn.Module):
 
         # Apply sparsity mask to maintain sparsity pattern
         return effective_W * self.sparsity_mask
-
 
     def calculate_matrix_similarity(self):
         """
@@ -145,6 +145,8 @@ class BasicRNN(nn.Module):
           W_ss, W_sr, W_so, W_rs, W_rr, W_ro, W_os, W_or, W_oo
         """
         batch_size, device = x.shape[0], x.device
+        
+        # Just flatten the input
         x = x.view(batch_size, -1)
 
         # Get effective weight matrix (base + LoRA if enabled)
@@ -247,7 +249,8 @@ class BasicRNN(nn.Module):
             'lora_rank': getattr(self, 'lora_rank', 8),
             'lora_alpha': getattr(self, 'lora_alpha', 16),
             'sensory_type': getattr(self, 'sensory_type', 'visual'),
-            'dropout_rate': getattr(self, 'dropout', nn.Dropout(0.2)).p
+            'dropout_rate': getattr(self, 'dropout', nn.Dropout(0.2)).p,
+            'use_position_encoding': getattr(self, 'use_position_encoding', False)
         }
         
         with open(os.path.join(path, 'model_config.pkl'), 'wb') as f:
@@ -288,6 +291,7 @@ class BasicRNN(nn.Module):
         lora_alpha = config.get('lora_alpha', 16)
         sensory_type = config.get('sensory_type', 'visual')
         dropout_rate = config.get('dropout_rate', 0.2)
+        use_position_encoding = config.get('use_position_encoding', False)
         
         # Create a new instance with the loaded parameters
         model = cls(
@@ -305,7 +309,8 @@ class BasicRNN(nn.Module):
             lora_rank=lora_rank,
             lora_alpha=lora_alpha,
             sensory_type=sensory_type,
-            dropout_rate=dropout_rate
+            dropout_rate=dropout_rate,
+            use_position_encoding=use_position_encoding
         )
         
         # Load the model state
@@ -354,3 +359,62 @@ class ThreeHiddenMLP(nn.Module):
 
         output = self.hidden3_to_output(hidden3)
         return output
+    
+class TwoHiddenMLP(nn.Module):
+    def __init__(self, input_size=784, hidden1_size=352, hidden2_size=352, output_size=10, 
+                 freeze=False, use_weight_clipping=True):
+        super().__init__()
+        self.input_size = input_size
+        self.hidden1_size = hidden1_size
+        self.hidden2_size = hidden2_size
+        self.output_size = output_size
+        # Add pruning attribute to avoid AttributeError
+        self.pruning = False
+        self.use_weight_clipping = use_weight_clipping
+        self.percentile_clip_min = 10  # Bottom 10 percentile
+        self.percentile_clip_max = 90  # Top 10 percentile
+
+        self.input_to_hidden1 = nn.Linear(input_size, hidden1_size, bias=True)
+        if freeze:
+            self.register_buffer('hidden1_to_hidden2', torch.randn(hidden1_size, hidden2_size))
+        else:
+            self.hidden1_to_hidden2 = nn.Parameter(torch.randn(hidden1_size, hidden2_size))
+        self.hidden2_to_output = nn.Linear(hidden2_size, output_size, bias=True)
+        self.relu = nn.ReLU()
+        
+        # Initialize with clipping if enabled - only applied once during initialization
+        if self.use_weight_clipping:
+            self.clip_weights()
+            print("Applied weight clipping during initialization only")
+
+    def clip_weights(self):
+        """
+        Clip weights to lie between percentiles of their distribution.
+        This is applied to hidden1_to_hidden2 weights only.
+        """
+        if not hasattr(self, 'hidden1_to_hidden2') or not isinstance(self.hidden1_to_hidden2, nn.Parameter):
+            return
+            
+        with torch.no_grad():
+            # Flatten weights for percentile calculation
+            flat_weights = self.hidden1_to_hidden2.view(-1)
+            
+            # Calculate percentiles
+            min_val = torch.quantile(flat_weights, self.percentile_clip_min / 100.0)
+            max_val = torch.quantile(flat_weights, self.percentile_clip_max / 100.0)
+            
+            # Clip weights to the range [min_val, max_val]
+            self.hidden1_to_hidden2.data.clamp_(min_val, max_val)
+            
+            print(f"Clipped weights to range [{min_val.item():.4f}, {max_val.item():.4f}] "
+                  f"({self.percentile_clip_min}% to {self.percentile_clip_max}%)")
+
+    def forward(self, x):
+        x = x.view(x.size(0), -1)
+
+        hidden1 = self.relu(self.input_to_hidden1(x))
+        
+        # No weight clipping during forward pass - removed from training process
+        hidden2 = self.relu(torch.matmul(hidden1, self.hidden1_to_hidden2))
+        output = self.hidden2_to_output(hidden2)
+        return output   
