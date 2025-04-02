@@ -1,32 +1,5 @@
 import numpy as np
 
-def normalize_matrix(W, mode=None):
-    """
-    Normalize a matrix using specified mode.
-    
-    Args:
-        W (np.ndarray): Input matrix to normalize
-        mode (str): Normalization mode ('minmax', 'clip', or None)
-    
-    Returns:
-        np.ndarray: Normalized matrix
-    """
-    if mode is None:
-        return W
-        
-    if mode == 'minmax':
-        min_val = np.min(np.abs(W))
-        max_val = np.max(np.abs(W))
-        return (W - min_val) / (max_val - min_val)
-    elif mode == 'clip':
-        # Use 10th and 90th percentiles as clip range
-        min_val = np.percentile(np.abs(W), 10)
-        max_val = np.percentile(np.abs(W), 90)
-        W = np.clip(W, min_val, max_val)
-        return (W - min_val) / (max_val - min_val)  # Normalize to [0,1]
-    else:
-        raise ValueError(f"Unknown normalization mode: {mode}")
-
 def get_weight_matrix(base, mode):
     """
     Generate weight matrices based on different initialization modes.
@@ -155,7 +128,8 @@ def get_weight_matrix(base, mode):
 
         # Compute cumulative variance
         explained_variance = np.cumsum(s**2) / np.sum(s**2)
-        n_components = np.argmax(explained_variance >= 0.99) + 1
+        n_components = np.argmax(explained_variance >= 0.1) + 1
+        print(f"Number of components: {n_components}")
 
         # Reconstruct with top-k components
         U_k = U[:, :n_components]
@@ -169,7 +143,9 @@ def get_weight_matrix(base, mode):
         # First compute the number of components needed
         U, s, Vt = np.linalg.svd(base, full_matrices=False)
         explained_variance = np.cumsum(s**2) / np.sum(s**2)
-        n_components = np.argmax(explained_variance >= 0.99) + 1
+        n_components = np.argmax(explained_variance >= 0.1) + 1
+        print(f"Number of components: {n_components}")
+
         S_k = np.diag(s[:n_components])
         n = base.shape[0]
 
@@ -179,6 +155,78 @@ def get_weight_matrix(base, mode):
         random_structure_matrix = U_rand[:, :n_components] @ S_k @ V_rand[:, :n_components].T
 
         return random_structure_matrix.astype(np.float32).copy()
+    
+    elif mode == 'random_singular_values':
+        # Perform SVD decomposition
+        U, s, Vt = np.linalg.svd(base, full_matrices=False)
+        
+        # Compute number of components needed for 99% variance
+        explained_variance = np.cumsum(s**2) / np.sum(s**2)
+        n_components = np.argmax(explained_variance >= 0.1) + 1
+        print(f"Number of components: {n_components}")
+        
+        # Keep original U and V, but randomize singular values
+        # Generate random singular values with similar distribution
+        s_mean = np.mean(s[:n_components])
+        s_std = np.std(s[:n_components])
+        random_s = np.random.normal(s_mean, s_std, n_components)
+        random_s = np.clip(random_s, 0, None)  # Ensure non-negative
+        
+        # Sort random singular values in descending order
+        random_s = np.sort(random_s)[::-1]
+        
+        # Create diagonal matrix with random singular values
+        S_random = np.diag(random_s)
+        
+        # Reconstruct matrix with original U and V but random singular values
+        random_singular_matrix = U[:, :n_components] @ S_random @ Vt[:n_components, :]
+        
+        return random_singular_matrix.astype(np.float32).copy()
+    
+    elif mode == 'random_singular_values_random_spectrum':
+        # Perform SVD decomposition
+        U, s, Vt = np.linalg.svd(base, full_matrices=False)
+        
+        # Compute number of components needed for 99% variance
+        explained_variance = np.cumsum(s**2) / np.sum(s**2)
+        n_components = np.argmax(explained_variance >= 0.1) + 1
+        
+        # Keep original U and V, but randomize singular values
+        # Generate random singular values with similar distribution
+        s_mean = np.mean(s[:n_components])
+        s_std = np.std(s[:n_components])
+        random_s = np.random.normal(s_mean, s_std, n_components)    
+        
+        # Sort random singular values in descending order
+        random_s = np.sort(random_s)[::-1]
+        
+        # Create diagonal matrix with random singular values
+        S_random = np.diag(random_s)
+        n = base.shape[0]
+
+        # Generate random orthogonal structure
+        U_rand, _ = np.linalg.qr(np.random.randn(n, n))
+        V_rand, _ = np.linalg.qr(np.random.randn(n, n))
+        random_structure_matrix = U_rand[:, :n_components] @ S_random @ V_rand[:, :n_components].T
+
+        return random_structure_matrix.astype(np.float32).copy()
+    
+    elif mode == 'identical_singular_values':
+        # Perform SVD decomposition
+        U, s, Vt = np.linalg.svd(base, full_matrices=False)
+        
+        # Compute number of components needed for 99% variance
+        explained_variance = np.cumsum(s**2) / np.sum(s**2)
+        n_components = np.argmax(explained_variance >= 0.1) + 1
+        print(f"Number of components: {n_components}")
+        
+        # Create diagonal matrix with all ones for singular values
+        S_ones = np.diag(np.ones(n_components))
+        
+        # Reconstruct matrix with original U and V but identical singular values
+        identical_singular_matrix = U[:, :n_components] @ S_ones @ Vt[:n_components, :]
+        
+        return identical_singular_matrix.astype(np.float32).copy()
     
     else:
         raise ValueError(f"Unknown mode: {mode}")

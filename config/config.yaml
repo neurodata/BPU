@@ -3,10 +3,10 @@ result_path: "../results"  # Path to save results and models
 signed: true
 sio: true # sio: sensory-interneuron-output
 fewshot:
-  enabled: false # options: true for  few-shot training, false for full training
+  enabled: true # options: true for  few-shot training, false for full training
   samples: 60 # options: 60 for 1%, 120 for 2%, 300 for 5%, 600 for 10%
   batch_size: 17
-num_trials: 1
+num_trials: 5
 num_epochs: 10
 batch_size: 64
 learning_rate: 0.003
@@ -26,21 +26,21 @@ experiments:
   # Main Experiments
   # ------------------------------------------------------------------------------------------------
 
-  # 1. DPU-LORA: rather than fine-tuning the DPU, do the LORA thing, where we literally add a low-rank matrix to it
-  DPU_LoRA:
-    type: basicrnn
-    trainable: false  # Keep DPU weights frozen
-    init: droso
-    lora:
-      enabled: true
-      rank: 8      # r parameter from LoRA paper
-      alpha: 16    # alphax scaling factor
+  # # 1. DPU-LORA: rather than fine-tuning the DPU, do the LORA thing, where we literally add a low-rank matrix to it
+  # DPU_LoRA:
+  #   type: basicrnn
+  #   trainable: false  # Keep DPU weights frozen
+  #   init: droso
+  #   lora:
+  #     enabled: true
+  #     rank: 8      # r parameter from LoRA paper
+  #     alpha: 16    # alphax scaling factor
 
-  # 2. unlearnable DPU
-  Unlearnable_DPU:
-    type: basicrnn
-    trainable: false
-    init: droso
+  # # 2. unlearnable DPU
+  # Unlearnable_DPU:
+  #   type: basicrnn
+  #   trainable: false
+  #   init: droso
 
   # # 3. learnable RNN (maintaining the same sparsity, but not the same sparsity pattern)
   # Learnable_RNN_Same_Sparsity: 
@@ -189,19 +189,39 @@ experiments:
   #   init: eigenvalue_permuted
 
   # # # 15. Unlearnable RNN with low-rank initialization
-  # Unlearnable_RNN_Low_Rank:
-  #   type: basicrnn
-  #   trainable: false
-  #   init: low_rank_approximation
-  #   sensory_type: all
+  Unlearnable_RNN_Low_Rank:
+    type: basicrnn
+    trainable: false
+    init: low_rank_approximation
+    sensory_type: all
 
   # # 16. Unlearnable RNN with random structure matrix initialization
-  # Unlearnable_RNN_Random_Structure_Same_Spectrum:
-  #   type: basicrnn
-  #   trainable: false
-  #   init: random_structure_same_spectrum
-  #   sensory_type: all
+  Unlearnable_RNN_Random_Structure_Same_Spectrum:
+    type: basicrnn
+    trainable: false
+    init: random_structure_same_spectrum
+    sensory_type: all
 
+  # # 17. Unlearnable RNN with random singular values initialization
+  Unlearnable_RNN_Random_Singular_Values:
+    type: basicrnn
+    trainable: false
+    init: random_singular_values
+    sensory_type: all
+
+  # # 18. Unlearnable RNN with identical singular values initialization
+  Unlearnable_RNN_Identical_Singular_Values:
+    type: basicrnn
+    trainable: false
+    init: identical_singular_values
+    sensory_type: all
+
+  # # 19. Unlearnable RNN with random singular values and random spectrum initialization
+  Unlearnable_RNN_Random_Singular_Values_Random_Spectrum:
+    type: basicrnn
+    trainable: false
+    init: random_singular_values_random_spectrum
+    sensory_type: all
 
   # ------------------------------------------------------------------------------------------------
   # Sensory Type Experiments, using the same model as the main experiments, but with different sensory inputs, which includes:

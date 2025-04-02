@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-from utils import normalize_matrix
 
 def load_drosophila_matrix(csv_path, signed=False):
     """
@@ -19,47 +18,7 @@ def load_drosophila_matrix(csv_path, signed=False):
 
     return W_norm
 
-def load_connectivity_data(connectivity_path, annotation_path, rescale_factor=4e-2, normalization=None):
-    """
-    Load and preprocess connectivity matrix and annotation data for Drosophila.
-    """
-    df_annot = pd.read_csv(annotation_path)
-
-    mask = (df_annot['celltype'] == 'sensory') & (df_annot['additional_annotations'] == 'visual')
-    sensory_visual_ids = []
-    for _, row in df_annot[mask].iterrows():
-        for col in ['left_id', 'right_id']:
-            id_str = str(row[col]).lower()
-            if id_str != "no pair":
-                sensory_visual_ids.append(int(id_str))
-
-    sensory_visual_ids = sorted(set(sensory_visual_ids))
-    print(f"Found {len(sensory_visual_ids)} sensory-visual neuron IDs")
-
-    df_conn = pd.read_csv(connectivity_path, index_col=0)
-    df_conn.index = df_conn.index.astype(int)
-    df_conn.columns = df_conn.columns.astype(int)
-
-    valid_sensory_ids = [nid for nid in sensory_visual_ids if nid in df_conn.index]
-    other_ids = [nid for nid in df_conn.index if nid not in valid_sensory_ids]
-
-    df_reindexed = df_conn.loc[valid_sensory_ids + other_ids, valid_sensory_ids + other_ids]
-
-    adj_matrix = df_reindexed.values
-    adj_matrix = normalize_matrix(adj_matrix, mode=normalization)
-    adj_matrix = adj_matrix * rescale_factor
-
-    num_S = len(valid_sensory_ids)
-    return {
-        'W': adj_matrix,
-        'W_ss': adj_matrix[:num_S, :num_S],
-        'W_sr': adj_matrix[:num_S, num_S:],
-        'W_rs': adj_matrix[num_S:, :num_S],
-        'W_rr': adj_matrix[num_S:, num_S:],
-        'sensory_ids': valid_sensory_ids
-    }
-
-def load_sio_connectivity_data(connectivity_path, annotation_path, rescale_factor=4e-2, normalization='minmax', sensory_type='visual'):
+def load_connectivity_data(connectivity_path, annotation_path, rescale_factor=4e-2, sensory_type='visual'):
     """
     Load and process the connectivity matrix and neuron annotations, splitting neurons into
     Sensory, Internal, and Output groups, then return a dictionary of 9 connectivity sub-matrices
@@ -127,6 +86,10 @@ def load_sio_connectivity_data(connectivity_path, annotation_path, rescale_facto
     print(f"Annotation file: Found {len(output_ids)} output neuron IDs")
 
     df_conn = pd.read_csv(connectivity_path, index_col=0)
+
+    # Apply normalization
+    df_conn = df_conn * rescale_factor
+
     df_conn.index = df_conn.index.astype(int)
     df_conn.columns = df_conn.columns.astype(int)
     all_neuron_ids = sorted(df_conn.index.tolist())
@@ -147,14 +110,9 @@ def load_sio_connectivity_data(connectivity_path, annotation_path, rescale_facto
 
     # Create the SIO-ordered adjacency matrix
     ordered_ids = valid_sensory_ids + valid_internal_ids + valid_output_ids
-    df_conn_sio = df_conn.loc[ordered_ids, ordered_ids]
-    adjacency = df_conn_sio.values  # shape: [N, N]
+    adjacency = df_conn.loc[ordered_ids, ordered_ids].values  # shape: [N, N]
     
-    # Apply normalization
-    adjacency = normalize_matrix(adjacency, mode=normalization)
-    adjacency = adjacency * rescale_factor
-
-    # Calculate indices for each group in the ISO-ordered matrix
+    # Calculate indices for each group in the SIO-ordered matrix
     num_sensory = len(valid_sensory_ids)
     num_internal = len(valid_internal_ids)
     num_output = len(valid_output_ids)
@@ -172,6 +130,7 @@ def load_sio_connectivity_data(connectivity_path, annotation_path, rescale_facto
     W_oo = adjacency[num_sensory+num_internal:, num_sensory+num_internal:]
 
     return {
+        'W_original': df_conn,
         'W': adjacency,  # Now in SIO order
         'W_ss': W_ss,
         'W_sr': W_sr,

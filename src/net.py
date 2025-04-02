@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import os
-import math
 import pickle
+
 class BasicRNN(nn.Module):
     def __init__(self, 
                  W_init,
@@ -12,6 +12,7 @@ class BasicRNN(nn.Module):
                  internal_dim: int,
                  output_dim: int,
                  num_classes: int, 
+                 sio: bool = True,
                  trainable: bool = False,
                  pruning: bool = False,
                  target_nonzeros: int = None,
@@ -43,6 +44,7 @@ class BasicRNN(nn.Module):
         self.internal_dim = internal_dim
         self.output_dim = output_dim
         self.total_dim = sensory_dim + internal_dim + output_dim
+        self.sio = sio
         
         self.pruning = pruning
         self.lambda_l1 = lambda_l1
@@ -152,43 +154,64 @@ class BasicRNN(nn.Module):
         # Get effective weight matrix (base + LoRA if enabled)
         W_eff = self.get_effective_W()
 
-        # Partition the effective matrix W
-        S, I, O = self.sensory_dim, self.internal_dim, self.output_dim
-        W_ss = W_eff[0:S,   0:S]
-        W_sr = W_eff[0:S,   S:S+I]
-        W_so = W_eff[0:S,   S+I:S+I+O]
-        W_rs = W_eff[S:S+I, 0:S]
-        W_rr = W_eff[S:S+I, S:S+I]
-        W_ro = W_eff[S:S+I, S+I:S+I+O]
-        W_os = W_eff[S+I:S+I+O, 0:S]
-        W_or = W_eff[S+I:S+I+O, S:S+I]
-        W_oo = W_eff[S+I:S+I+O, S+I:S+I+O]
+        if self.sio:
+            # Partition the effective matrix W
+            S, I, O = self.sensory_dim, self.internal_dim, self.output_dim
+            W_ss = W_eff[0:S,   0:S]
+            W_sr = W_eff[0:S,   S:S+I]
+            W_so = W_eff[0:S,   S+I:S+I+O]
+            W_rs = W_eff[S:S+I, 0:S]
+            W_rr = W_eff[S:S+I, S:S+I]
+            W_ro = W_eff[S:S+I, S+I:S+I+O]
+            W_os = W_eff[S+I:S+I+O, 0:S]
+            W_or = W_eff[S+I:S+I+O, S:S+I]
+            W_oo = W_eff[S+I:S+I+O, S+I:S+I+O]
 
-        # Initialize states S, I, O to zero
-        S_state = torch.zeros(batch_size, S, device=device)
-        I_state = torch.zeros(batch_size, I, device=device)
-        O_state = torch.zeros(batch_size, O, device=device)
+            # Initialize states S, I, O to zero
+            S_state = torch.zeros(batch_size, S, device=device)
+            I_state = torch.zeros(batch_size, I, device=device)
+            O_state = torch.zeros(batch_size, O, device=device)
 
-        # Input projection with dropout
-        E = self.dropout(self.input_proj(x))
+            # Input projection with dropout
+            E = self.dropout(self.input_proj(x))
 
-        for t in range(time_steps):
-            # Optionally only inject input every 2 steps
-            E_t = E if (t % 2 == 0) else torch.zeros_like(E)
+            for t in range(time_steps):
+                # Optionally only inject input every 2 steps
+                E_t = E if (t % 2 == 0) else torch.zeros_like(E)
 
-            S_next = self.activation(
-                S_state @ W_ss + E_t + I_state @ W_rs + O_state @ W_os
-            )
-            I_next = self.activation(
-                I_state @ W_rr + S_state @ W_sr + O_state @ W_or
-            )
-            O_next = self.activation(
-                O_state @ W_oo + I_state @ W_ro + S_state @ W_so
-            )
+                S_next = self.activation(
+                    S_state @ W_ss + E_t + I_state @ W_rs + O_state @ W_os
+                )
+                I_next = self.activation(
+                    I_state @ W_rr + S_state @ W_sr + O_state @ W_or
+                )
+                O_next = self.activation(
+                    O_state @ W_oo + I_state @ W_ro + S_state @ W_so
+                )
 
-            S_state, I_state, O_state = S_next, I_next, O_next
+                S_state, I_state, O_state = S_next, I_next, O_next
+                
+            return self.output_layer(O_state)
+        else:
+            # Initialize state to zero
+            state = torch.zeros(batch_size, self.total_dim, device=device)
             
-        return self.output_layer(O_state)
+            # Input projection with dropout
+            E = self.dropout(self.input_proj(x))
+            
+            for t in range(time_steps):
+                # Optionally only inject input every 2 steps
+                E_t = E if (t % 2 == 0) else torch.zeros_like(E)
+                
+                # Update state using the whole matrix W
+                # E_t is projected to the full dimension
+                state_next = self.activation(
+                    state @ W_eff + E_t
+                )
+                state = state_next
+            
+            # Use the whole state for output
+            return self.output_layer(state)
 
     def get_l1_loss(self):
         """Compute L1 regularization loss on base weights only"""

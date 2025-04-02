@@ -44,27 +44,18 @@ if fewshot_enabled:
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def load_connectivity_info(cfg_data, sensory_type):
-    if sio:
-        return load_sio_connectivity_data(
-            connectivity_path=cfg_data["csv_paths"]["signed"],
-            annotation_path=cfg_data["annotation_path"], 
-            rescale_factor=cfg_data.get('rescale_factor', 4e-2), 
-            normalization=cfg_data.get('normalization', None),
-            sensory_type=sensory_type
-        )
-    else:
-        return load_connectivity_data(
-            connectivity_path=cfg_data["csv_paths"]["signed"],
-            annotation_path=cfg_data["annotation_path"], 
-            rescale_factor=cfg_data.get('rescale_factor', 4e-2),
-            normalization=cfg_data.get('normalization', None)
-        )
-
 def initialize_model(config):
     if config['type'] == 'basicrnn':
-        conn = load_connectivity_info(config_data, config.get('sensory_type', 'all'))
-        W_init = get_weight_matrix(conn['W'], config.get('init'))
+        conn = load_connectivity_data(
+            connectivity_path=config_data["csv_paths"]["signed"],
+            annotation_path=config_data["annotation_path"], 
+            rescale_factor=config_data.get('rescale_factor', 4e-2), 
+            sensory_type=config.get('sensory_type', 'all')
+        )
+        if sio:
+            W_init = get_weight_matrix(conn['W'], config.get('init'))
+        else:
+            W_init = get_weight_matrix(conn['W_original'], config.get('init'))
 
         lora_config = config.get('lora', {})
         use_lora = lora_config.get('enabled', False)
@@ -79,6 +70,7 @@ def initialize_model(config):
             internal_dim=conn['W_rr'].shape[0],
             output_dim=conn['W_oo'].shape[0],
             num_classes=10,
+            sio=sio,
             trainable=config.get('trainable'),
             pruning=config.get('pruning'),
             target_nonzeros=np.count_nonzero(W_init),
@@ -204,6 +196,8 @@ def save_results(exp_id, config, trial_num, results, signed):
     filename = f"{exp_id}_trial{trial_num}"
     if "fewshot" in config:
         filename = f"{exp_id}_trial{trial_num}"
+    if not sio:
+        filename += ".whole"
     if signed:
         filename += ".signed"
     filename += ".pkl"
