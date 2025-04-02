@@ -53,10 +53,12 @@ def initialize_model(config):
             rescale_factor=config_data.get('rescale_factor', 4e-2), 
             sensory_type=config.get('sensory_type', 'all')
         )
+
+        explained_variance = config.get('explained_variance', 0.1) # for SVD-based initialization
         if sio:
-            W_init = get_weight_matrix(conn['W'], config.get('init'))
+            W_init = get_weight_matrix(conn['W'], config.get('init'), explained_variance)
         else:
-            W_init = get_weight_matrix(conn['W_original'], config.get('init'))
+            W_init = get_weight_matrix(conn['W_original'], config.get('init'), explained_variance)
 
         lora_config = config.get('lora', {})
         use_lora = lora_config.get('enabled', False)

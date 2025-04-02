@@ -108,12 +108,12 @@ experiments:
   #   sensory_type: all
   #   use_cnn_features: true
 
-  Unlearnable_DPU_Accuracy_Leveraging:
-    type: basicrnn
-    trainable: false
-    init: droso
-    sensory_type: all
-    dropout_rate: 0.1
+  # Unlearnable_DPU_Accuracy_Leveraging:
+  #   type: basicrnn
+  #   trainable: false
+  #   init: droso
+  #   sensory_type: all
+  #   dropout_rate: 0.1
 
   # Unlearnable_RNN_Same_Sparsity_Accuracy_Leveraging:
   #   type: basicrnn
@@ -188,41 +188,46 @@ experiments:
   #   trainable: false
   #   init: eigenvalue_permuted
 
-  # # # # 15. Unlearnable RNN with low-rank initialization
-  # Unlearnable_RNN_Low_Rank:
-  #   type: basicrnn
-  #   trainable: false
-  #   init: low_rank_approximation
-  #   sensory_type: all
+  # # # 15. Unlearnable RNN with same eigenvalues and same eigenvectors initialization
+  Unlearnable_RNN_Low_Rank:
+    type: basicrnn
+    trainable: false
+    init: same_eigenvalues_same_eigenvectors
+    sensory_type: all
+    explained_variance: 0.1
 
-  # # # 16. Unlearnable RNN with random structure matrix initialization
-  # Unlearnable_RNN_Random_Structure_Same_Spectrum:
-  #   type: basicrnn
-  #   trainable: false
-  #   init: random_structure_same_spectrum
-  #   sensory_type: all
+  # # 16. Unlearnable RNN with same eigenvalues and random eigenvectors initialization
+  Unlearnable_RNN_Random_Structure_Same_Spectrum:
+    type: basicrnn
+    trainable: false
+    init: same_eigenvalues_random_eigenvectors
+    sensory_type: all
+    explained_variance: 0.1
 
-  # # # 17. Unlearnable RNN with random singular values initialization
-  # Unlearnable_RNN_Random_Singular_Values:
-  #   type: basicrnn
-  #   trainable: false
-  #   init: random_singular_values
-  #   sensory_type: all
+  # # 17. Unlearnable RNN with random eigenvalues and same eigenvectors initialization
+  Unlearnable_RNN_Random_Singular_Values:
+    type: basicrnn
+    trainable: false
+    init: random_eigenvalues_same_eigenvectors
+    sensory_type: all
+    explained_variance: 0.1
 
-  # # # 18. Unlearnable RNN with identical singular values initialization
-  # Unlearnable_RNN_Identical_Singular_Values:
-  #   type: basicrnn
-  #   trainable: false
-  #   init: identical_singular_values
-  #   sensory_type: all
+  # # 18. Unlearnable RNN with identical eigenvalues and same eigenvectors initialization
+  Unlearnable_RNN_Identical_Singular_Values:
+    type: basicrnn
+    trainable: false
+    init: identical_eigenvalues_same_eigenvectors
+    sensory_type: all
+    explained_variance: 0.1
 
-  # # # 19. Unlearnable RNN with random singular values and random spectrum initialization
-  # Unlearnable_RNN_Random_Singular_Values_Random_Spectrum:
-  #   type: basicrnn
-  #   trainable: false
-  #   init: random_singular_values_random_spectrum
-  #   sensory_type: all
-
+  # # 19. Unlearnable RNN with random eigenvalues and random eigenvectors initialization
+  Unlearnable_RNN_Random_Singular_Values_Random_Spectrum:
+    type: basicrnn
+    trainable: false
+    init: random_eigenvalues_random_eigenvectors
+    sensory_type: all
+    explained_variance: 0.1
+    
   # ------------------------------------------------------------------------------------------------
   # Sensory Type Experiments, using the same model as the main experiments, but with different sensory inputs, which includes:
   # 1. olfactory

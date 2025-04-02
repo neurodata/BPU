@@ -1,6 +1,6 @@
 import numpy as np
 
-def get_weight_matrix(base, mode):
+def get_weight_matrix(base, mode, explained_variance=0.1):
     """
     Generate weight matrices based on different initialization modes.
     
@@ -122,13 +122,13 @@ def get_weight_matrix(base, mode):
         # Return a contiguous array
         return (reconstructed * scaling_factor).astype(np.float32).copy()
     
-    elif mode == 'low_rank_approximation':
+    elif mode == 'same_eigenvalues_same_eigenvectors':
         # Perform SVD decomposition
         U, s, Vt = np.linalg.svd(base, full_matrices=False)
 
         # Compute cumulative variance
         explained_variance = np.cumsum(s**2) / np.sum(s**2)
-        n_components = np.argmax(explained_variance >= 0.1) + 1
+        n_components = np.argmax(explained_variance >= explained_variance) + 1
         print(f"Number of components: {n_components}")
 
         # Reconstruct with top-k components
@@ -139,7 +139,7 @@ def get_weight_matrix(base, mode):
 
         return low_rank_matrix.astype(np.float32).copy()
     
-    elif mode == 'random_structure_same_spectrum':
+    elif mode == 'same_eigenvalues_random_eigenvectors':
         # First compute the number of components needed
         U, s, Vt = np.linalg.svd(base, full_matrices=False)
         explained_variance = np.cumsum(s**2) / np.sum(s**2)
@@ -156,7 +156,7 @@ def get_weight_matrix(base, mode):
 
         return random_structure_matrix.astype(np.float32).copy()
     
-    elif mode == 'random_singular_values':
+    elif mode == 'random_eigenvalues_same_eigenvectors':
         # Perform SVD decomposition
         U, s, Vt = np.linalg.svd(base, full_matrices=False)
         
@@ -183,7 +183,7 @@ def get_weight_matrix(base, mode):
         
         return random_singular_matrix.astype(np.float32).copy()
     
-    elif mode == 'random_singular_values_random_spectrum':
+    elif mode == 'random_eigenvalues_random_eigenvectors':
         # Perform SVD decomposition
         U, s, Vt = np.linalg.svd(base, full_matrices=False)
         
@@ -211,7 +211,7 @@ def get_weight_matrix(base, mode):
 
         return random_structure_matrix.astype(np.float32).copy()
     
-    elif mode == 'identical_singular_values':
+    elif mode == 'identical_eigenvalues_same_eigenvectors':
         # Perform SVD decomposition
         U, s, Vt = np.linalg.svd(base, full_matrices=False)
         
