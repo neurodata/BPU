@@ -130,7 +130,7 @@ def load_connectivity_data(connectivity_path, annotation_path, rescale_factor=4e
     W_oo = adjacency[num_sensory+num_internal:, num_sensory+num_internal:]
 
     return {
-        'W_original': df_conn,
+        'W_original': df_conn.values,
         'W': adjacency,  # Now in SIO order
         'W_ss': W_ss,
         'W_sr': W_sr,
