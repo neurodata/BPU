@@ -4,7 +4,7 @@ signed: true
 sio: true # sio: sensory-interneuron-output
 fewshot:
   enabled: true # options: true for  few-shot training, false for full training
-  samples: 60 # options: 60 for 1%, 120 for 2%, 300 for 5%, 600 for 10%
+  samples: 120 # options: 60 for 1%, 120 for 2%, 300 for 5%, 600 for 10%
   batch_size: 17
 num_trials: 5
 num_epochs: 10

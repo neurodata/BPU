@@ -84,8 +84,13 @@ class BasicRNN(nn.Module):
             # Scale B to make initial LoRA contribution small
             self.lora_B.data.mul_(2.0)
 
-        self.input_proj = nn.Linear(input_dim, sensory_dim)
-        self.output_layer = nn.Linear(output_dim, num_classes)
+        if self.sio:
+            self.input_proj = nn.Linear(input_dim, sensory_dim)
+            self.output_layer = nn.Linear(output_dim, num_classes)
+        else:
+            self.input_proj = nn.Linear(input_dim, self.total_dim)
+            self.output_layer = nn.Linear(self.total_dim, num_classes)
+            
         self.activation = nn.ReLU()
         
         # Dropout layer for regularization
