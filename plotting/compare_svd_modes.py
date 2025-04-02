@@ -2,11 +2,14 @@ import os
 import sys
 import re
 import pickle
-sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "..", "src")))
 import numpy as np
 import matplotlib.pyplot as plt
 
-RESULTS_DIR = "../results/"
+# Get the project root directory (assuming this script is in plotting/)
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+# Configuration
+RESULTS_DIR = os.path.join(PROJECT_ROOT, "results")
 SELECTED_SAMPLES = ["1%", "2%", "5%", "10%"]  # List of samples to plot
 
 # Updated color map for experiments
@@ -107,7 +110,7 @@ def plot_results(data, ax, selected_sample, global_y_max, panel_position):
       
         # Use solid line for SIO and dashed line for whole matrix
         linestyle = '--' if exp_data['is_whole'] else '-'
-        linewidth = 5.0
+        linewidth = 3.0
       
         ax.plot(
             x, mean,
@@ -168,12 +171,12 @@ def create_custom_legend():
         display_name = EXP_DISPLAY_NAMES.get(exp_name, exp_name.replace('_', ' ').title())
         # Add solid line for SIO version
         legend_elements.append(
-            plt.Line2D([0], [0], color=color, lw=5.0, linestyle='-',
+            plt.Line2D([0], [0], color=color, lw=3.0, linestyle='-',
                       label=f"{display_name} (SIO)")
         )
         # Add dashed line for whole matrix version
         legend_elements.append(
-            plt.Line2D([0], [0], color=color, lw=5.0, linestyle='--',
+            plt.Line2D([0], [0], color=color, lw=3.0, linestyle='--',
                       label=f"{display_name} (Whole)")
         )
     return legend_elements
@@ -218,11 +221,12 @@ if __name__ == "__main__":
         bbox_to_anchor=(0.5, -0.15),
         ncol=5,  # Changed to 2 columns for better layout
         frameon=False,
-        fontsize=32,
+        fontsize=24,
     )
     
     # Save figure
-    os.makedirs('figures', exist_ok=True)
-    plt.savefig("./figures/svd_modes_performance.pdf", bbox_inches="tight")
-    plt.savefig("./figures/svd_modes_performance.png", bbox_inches="tight", dpi=300)
-    plt.show() 
+    figures_dir = os.path.join(PROJECT_ROOT, "plotting", "figures")
+    os.makedirs(figures_dir, exist_ok=True)
+    plt.savefig(os.path.join(figures_dir, "svd_modes_performance.pdf"), bbox_inches="tight")
+    plt.savefig(os.path.join(figures_dir, "svd_modes_performance.png"), bbox_inches="tight", dpi=300)
+    plt.close() 

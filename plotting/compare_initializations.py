@@ -5,7 +5,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
-RESULTS_DIR = "../results/"
+# Get the project root directory (assuming this script is in plotting/)
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+RESULTS_DIR = os.path.join(PROJECT_ROOT, "results")
 SELECTED_SAMPLE = "1%"  # option: "1%", "2%", "5%", "10%", "100%"
 
 # Color map for different initialization methods
@@ -168,7 +171,9 @@ def plot_results(data):
         fontsize=12
     )
   
-    plt.savefig("./figures/init_comparison_all.pdf", bbox_inches="tight")
+    figures_dir = os.path.join(PROJECT_ROOT, "plotting", "figures")
+    os.makedirs(figures_dir, exist_ok=True)
+    plt.savefig(os.path.join(figures_dir, "init_comparison_all.pdf"), bbox_inches="tight")
     plt.close()
 
 def plot_by_category(data, category):
@@ -217,7 +222,9 @@ def plot_by_category(data, category):
     # Create legend with simplified names
     plt.legend(loc="lower right", frameon=True, fontsize=10)
     
-    plt.savefig(f"./figures/init_comparison_{category}.pdf", bbox_inches="tight")
+    figures_dir = os.path.join(PROJECT_ROOT, "plotting", "figures")
+    os.makedirs(figures_dir, exist_ok=True)
+    plt.savefig(os.path.join(figures_dir, f"init_comparison_{category}.pdf"), bbox_inches="tight")
     plt.close()
 
 if __name__ == "__main__":

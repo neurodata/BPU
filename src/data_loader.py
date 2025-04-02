@@ -1,7 +1,11 @@
+import os
 import torch
 from torchvision import datasets, transforms
 import numpy as np
 from sklearn.model_selection import StratifiedShuffleSplit
+
+# Get the project root directory (assuming this script is in src/)
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 class DataLoader:
     def __init__(self, task='mnist', batch_size=64, test_batch_size=256):
@@ -18,8 +22,11 @@ class DataLoader:
         else:
             raise ValueError(f"Unsupported task: {self.task}")
 
-    def load_data(self, data_dir='../data'):
+    def load_data(self, data_dir=None):
         """Load the full dataset and create test loader."""
+        if data_dir is None:
+            data_dir = os.path.join(PROJECT_ROOT, "data")
+            
         if self.task == 'mnist':
             transform = self.get_transforms()
             train_set = datasets.MNIST(data_dir, train=True, download=True, transform=transform)

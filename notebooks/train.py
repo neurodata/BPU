@@ -1,7 +1,7 @@
 import os
 import sys
-sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "..", "src")))
-
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.append(os.path.join(PROJECT_ROOT, "src"))
 import yaml
 import torch
 import torch.nn as nn
@@ -14,12 +14,13 @@ from connectome import *
 from data_loader import DataLoader
 from utils import get_weight_matrix
 
+
 # Load config
-with open("../config/config.yaml", "r") as f:
+with open(os.path.join(PROJECT_ROOT, "config", "config.yaml"), "r") as f:
     config_data = yaml.safe_load(f)
 
 # Global parameters
-result_path = config_data.get("result_path", "../results")
+result_path = os.path.join(PROJECT_ROOT, config_data.get("result_path", "results"))
 signed = config_data.get("signed", True)
 sio = config_data.get("sio", True)
 num_trials = config_data.get("num_trials", 10)
@@ -47,8 +48,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 def initialize_model(config):
     if config['type'] == 'basicrnn':
         conn = load_connectivity_data(
-            connectivity_path=config_data["csv_paths"]["signed"],
-            annotation_path=config_data["annotation_path"], 
+            connectivity_path=os.path.join(PROJECT_ROOT, config_data["csv_paths"]["signed"]),
+            annotation_path=os.path.join(PROJECT_ROOT, config_data["annotation_path"]), 
             rescale_factor=config_data.get('rescale_factor', 4e-2), 
             sensory_type=config.get('sensory_type', 'all')
         )

@@ -1,5 +1,5 @@
 # Global configuration
-result_path: "../results"  # Path to save results and models
+result_path: "results"  # Path to save results and models
 signed: true
 sio: false # sio: sensory-interneuron-output
 fewshot:
@@ -13,9 +13,9 @@ learning_rate: 0.003
 
 # Paths for connectivity data
 csv_paths:
-  signed: "../data/signed_connectivity_matrix.csv"
-  unsigned: "../data/ad_connectivity_matrix.csv"
-annotation_path: "../data/science.add9330_data_s2.csv"
+  signed: "data/signed_connectivity_matrix.csv"
+  unsigned: "data/ad_connectivity_matrix.csv"
+annotation_path: "data/science.add9330_data_s2.csv"
 rescale_factor: 0.04
 # Matrix normalization settings
 # normalization: "minmax"  # Options: "minmax", "clip", or None (no normalization)

@@ -1,6 +1,5 @@
 import os
 import sys
-sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "..", "src")))
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
@@ -9,10 +8,16 @@ from torchvision import datasets, transforms
 from tqdm import tqdm
 import yaml
 
+# Get the project root directory (assuming this script is in plotting/)
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+# Add src directory to Python path
+sys.path.append(os.path.join(PROJECT_ROOT, "src"))
+
 # Load config
-with open("../config/config.yaml", "r") as f:
+with open(os.path.join(PROJECT_ROOT, "config", "config.yaml"), "r") as f:
     config_data = yaml.safe_load(f)
-result_path = config_data.get("result_path", "../results")
+result_path = os.path.join(PROJECT_ROOT, config_data.get("result_path", "results"))
 
 def load_model(model_path):
     if not os.path.exists(model_path):
@@ -28,7 +33,7 @@ def get_mnist_data():
         transforms.Normalize((0.1307,), (0.3081,))
     ])
     
-    test_dataset = datasets.MNIST('../data', train=False, download=True, transform=transform)
+    test_dataset = datasets.MNIST(os.path.join(PROJECT_ROOT, "data"), train=False, download=True, transform=transform)
     return test_dataset
 
 def classify_images(model, dataset, device='cpu', max_samples=None):
@@ -185,6 +190,7 @@ if __name__ == "__main__":
     # Create and save visualization
     print("Creating visualization...")
     fig = create_visualization(results)
-    os.makedirs("./figures", exist_ok=True)
-    fig.savefig("./figures/mnist_visualization.pdf", bbox_inches="tight")
+    figures_dir = os.path.join(PROJECT_ROOT, "plotting", "figures")
+    os.makedirs(figures_dir, exist_ok=True)
+    fig.savefig(os.path.join(figures_dir, "mnist_visualization.pdf"), bbox_inches="tight")
     fig.show()

@@ -5,7 +5,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
-RESULTS_DIR = "../results/"
+# Get the project root directory (assuming this script is in plotting/)
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+RESULTS_DIR = os.path.join(PROJECT_ROOT, "results")
 SELECTED_SAMPLES = ["1%", "2%", "5%", "10%"]  # List of samples to plot
 
 COLOR_MAP = {
@@ -192,5 +195,8 @@ if __name__ == "__main__":
         fontsize=32,
     )
     
-    plt.savefig("./figures/performance_curve.pdf", bbox_inches="tight")
-    plt.show()
+    figures_dir = os.path.join(PROJECT_ROOT, "plotting", "figures")
+    os.makedirs(figures_dir, exist_ok=True)
+    plt.savefig(os.path.join(figures_dir, "performance_curve.pdf"), bbox_inches="tight")
+    plt.savefig(os.path.join(figures_dir, "performance_curve.png"), bbox_inches="tight", dpi=300)
+    plt.close()

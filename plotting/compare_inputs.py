@@ -3,8 +3,11 @@ import pickle
 import numpy as np
 import matplotlib.pyplot as plt
 
+# Get the project root directory (assuming this script is in plotting/)
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
 # Configuration
-RESULTS_DIR = "../results"
+RESULTS_DIR = os.path.join(PROJECT_ROOT, "results")
 SELECTED_SAMPLE = "5%"  # Assuming this matches plot_metrics.ipynb
 
 # Define colors for sensory types - these are the base labels
@@ -122,9 +125,10 @@ def plot_sensory_comparison():
     plt.title("Performance Comparison Across Different Sensory Input Types", fontsize=16)
     
     # Create figures directory if it doesn't exist
-    os.makedirs("./figures", exist_ok=True)
+    figures_dir = os.path.join(PROJECT_ROOT, "plotting", "figures")
+    os.makedirs(figures_dir, exist_ok=True)
     
-    plt.savefig("./figures/sensory_comparison.pdf", bbox_inches="tight")
+    plt.savefig(os.path.join(figures_dir, "sensory_comparison.pdf"), bbox_inches="tight")
     plt.show()
 
 if __name__ == "__main__":
