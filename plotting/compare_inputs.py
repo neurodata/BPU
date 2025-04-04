@@ -3,8 +3,13 @@ import pickle
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Get the project root directory (assuming this script is in plotting/)
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+# Get the project root directory
+try:
+    # When running as a script
+    PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+except NameError:
+    # When running in a notebook
+    PROJECT_ROOT = os.path.abspath(os.path.join(os.getcwd(), ".."))
 
 # Configuration
 RESULTS_DIR = os.path.join(PROJECT_ROOT, "results")
@@ -41,8 +46,9 @@ def load_sensory_comparison_results():
     neuron_counts = {}
     
     for fname in os.listdir(RESULTS_DIR):
+        # Check if file matches the new format (e.g., Unlearnable_Visual_DPU_trial1.signed.pkl)
         for exp_name, sensory_type in experiment_to_type.items():
-            if fname.startswith(exp_name):
+            if fname.startswith(exp_name) and fname.endswith('.signed.pkl'):
                 with open(os.path.join(RESULTS_DIR, fname), "rb") as f:
                     results = pickle.load(f)
                     
@@ -50,10 +56,8 @@ def load_sensory_comparison_results():
                     data.setdefault(sensory_type, []).append(results)
                     
                     # Extract neuron count if available
-                    if isinstance(results, list) and len(results) > 0:
-                        first_trial = results[0]
-                        if 'sensory_dim' in first_trial:
-                            neuron_counts[sensory_type] = first_trial['sensory_dim']
+                    if isinstance(results, dict) and 'sensory_dim' in results:
+                        neuron_counts[sensory_type] = results['sensory_dim']
     
     # Now enhance the labels with neuron counts if available
     enhanced_data = {}
@@ -74,25 +78,35 @@ def plot_sensory_comparison():
     
     data = load_sensory_comparison_results()
     
-    x_max = 0
-    
     # Plot each sensory type
-    for i, (sensory_label, acc_lists) in enumerate(sorted(data.items())):
+    for i, (sensory_label, results_list) in enumerate(sorted(data.items())):
         # Extract the base sensory type from the enhanced label (e.g., "Visual (123 neurons)" -> "Visual")
         base_sensory_type = sensory_label.split(" (")[0] 
         
-        # Convert list of accuracy lists to numpy array
-        acc_matrix = np.array([acc_list['test_acc'] if 'test_acc' in acc_list else acc_list['epoch_test_acc'] for acc_list in acc_lists])
-        epochs = acc_matrix.shape[1]
+        # Extract accuracy values from each result dictionary
+        acc_values = []
+        for result in results_list:
+            if 'test_acc' in result:
+                acc_values.append(result['test_acc'][1:11])  # Only take epochs 1-10
+            elif 'epoch_test_acc' in result:
+                acc_values.append(result['epoch_test_acc'][1:11])  # Only take epochs 1-10
+            else:
+                print(f"Warning: No accuracy data found in result for {sensory_label}")
+                continue
+        
+        if not acc_values:
+            print(f"Warning: No valid accuracy data found for {sensory_label}")
+            continue
+            
+        # Convert to numpy array
+        acc_matrix = np.array(acc_values)
         
         # Calculate mean and standard deviation across trials
         mean = np.mean(acc_matrix, axis=0)
         std = np.std(acc_matrix, axis=0, ddof=1)
         
-        # Consistent with other plots, for fewshot_300 results
-        target_samples = {"1%": 60, "2%": 120, "5%": 300, "10%": 600, "100%": 0.1}[SELECTED_SAMPLE]
-        x = np.arange(epochs) * target_samples * 10
-        x_max = max(x_max, x[-1])
+        # Use epochs 1-10 as x-axis
+        x = np.arange(1, 11)  # Only epochs 1-10
         
         # Get color based on the base sensory type
         color = SENSORY_COLORS.get(base_sensory_type)
@@ -115,14 +129,16 @@ def plot_sensory_comparison():
             alpha=0.15
         )
     
-    plt.xlabel("Training Samples" if SELECTED_SAMPLE != "100%" else "Epochs", fontsize=14)
-    plt.ylabel("Test Accuracy", fontsize=14)
-    plt.xlim(0, x_max*1.0)
-    plt.ylim(0, 1.0)
+    plt.xlabel("Epochs", fontsize=24)
+    plt.ylabel("Test Accuracy", fontsize=24)
+    plt.xlim(1, 10)  # Only show epochs 1-10
+    plt.ylim(0.9, 1.0)  # Set y-axis range to 0.9-1.0 for better visualization
     plt.grid(True, alpha=0.3)
+    plt.xticks(fontsize=20)
+    plt.yticks(fontsize=20)
     
     plt.legend(loc='lower right', fontsize=12)
-    plt.title("Performance Comparison Across Different Sensory Input Types", fontsize=16)
+    plt.title("Performance Comparison Across Different Sensory Input Types", fontsize=20, pad=20)
     
     # Create figures directory if it doesn't exist
     figures_dir = os.path.join(PROJECT_ROOT, "plotting", "figures")

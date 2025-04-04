@@ -30,18 +30,14 @@ def get_weight_matrix(base, mode, explained_variance=0.1):
         return base
     
     elif mode == 'permuted':
-        nonzero_vals = base[base != 0].astype(np.float32)
-        np.random.shuffle(nonzero_vals)
+        arr_np = base.copy()
+        rows, cols = arr_np.shape
+        # Create random permutations for rows and columns
+        row_perm = np.random.permutation(rows)
+        col_perm = np.random.permutation(cols)
         
-        non_zero_count = len(nonzero_vals)
-        idx = np.random.choice(base.size, non_zero_count, replace=False)
-        arr_np = np.zeros_like(base, dtype=np.float32)
-        
-        arr_np_flat = arr_np.flatten()
-        arr_np_flat[idx] = nonzero_vals
-        arr_np = arr_np_flat.reshape(base.shape)
-        
-        return arr_np
+        arr_np = arr_np[row_perm][:, col_perm]
+        return arr_np.astype(np.float32)
         
     elif mode == 'sparsity_matched':
         non_zero = np.count_nonzero(base)

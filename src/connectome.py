@@ -18,7 +18,7 @@ def load_drosophila_matrix(csv_path, signed=False):
 
     return W_norm
 
-def load_connectivity_data(connectivity_path, annotation_path, rescale_factor=4e-2, sensory_type='visual'):
+def load_connectivity_data(connectivity_path, annotation_path, rescale_factor=4e-2, sensory_type='all'):
     """
     Load and process the connectivity matrix and neuron annotations, splitting neurons into
     Sensory, Internal, and Output groups, then return a dictionary of 9 connectivity sub-matrices

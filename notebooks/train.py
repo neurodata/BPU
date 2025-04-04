@@ -27,6 +27,7 @@ num_trials = config_data.get("num_trials", 10)
 num_epochs = config_data.get("num_epochs", 10)
 batch_size = config_data.get("batch_size", 64)
 learning_rate = config_data.get("learning_rate", 0.001)
+dropout_rate = config_data.get("dropout_rate", 0.2)
 experiments = config_data.get("experiments", {})
 
 # Few-shot settings
@@ -64,7 +65,6 @@ def initialize_model(config):
         use_lora = lora_config.get('enabled', False)
         lora_rank = lora_config.get('rank', 8)
         lora_alpha = lora_config.get('alpha', 16)
-        dropout_rate = config.get('dropout_rate', 0.2)
 
         return BasicRNN(
             W_init=W_init,
@@ -82,6 +82,7 @@ def initialize_model(config):
             lora_rank=lora_rank,
             lora_alpha=lora_alpha,
             dropout_rate=dropout_rate,
+            time_steps=config.get('time_steps', 2),
         )   
     elif config['type'] == 'threehiddenmlp':
         return ThreeHiddenMLP(784, 29, 147, 400, 10, config.get('freeze', False))

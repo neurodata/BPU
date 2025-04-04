@@ -21,6 +21,7 @@ class BasicRNN(nn.Module):
                  lora_rank: int = 8,
                  lora_alpha: float = 16,
                  dropout_rate: float = 0.2,
+                 time_steps: int = 2,
                  ):
         """
         Unifies W_ss, W_sr, W_rs, W_rr, W_ro, W_or, W_so, W_oo, W_os into one
@@ -33,18 +34,23 @@ class BasicRNN(nn.Module):
         
         Regularization parameters:
         - dropout_rate: Rate for dropout applied to the input layer
+        
+        Time steps:
+        - time_steps: Number of time steps for RNN forward pass
         """
         super().__init__()
         
         print(f"BasicRNN init: trainable={trainable}, pruning={pruning}, target_nonzeros={target_nonzeros}, lambda_l1={lambda_l1}")
         print(f"LoRA config: use_lora={use_lora}, rank={lora_rank}, alpha={lora_alpha}")
         print(f"Regularization: dropout_rate={dropout_rate}")
+        print(f"Time steps: {time_steps}")
         
         self.sensory_dim = sensory_dim
         self.internal_dim = internal_dim
         self.output_dim = output_dim
         self.total_dim = sensory_dim + internal_dim + output_dim
         self.sio = sio
+        self.time_steps = time_steps
         
         self.pruning = pruning
         self.lambda_l1 = lambda_l1
@@ -146,12 +152,15 @@ class BasicRNN(nn.Module):
             'new_nonzeros': new_nonzeros.item()
         }
 
-    def forward(self, x, time_steps=2):
+    def forward(self, x):
         """
         Forward pass with states S, I, O. We slice the effective W into sub-blocks:
           W_ss, W_sr, W_so, W_rs, W_rr, W_ro, W_os, W_or, W_oo
         """
         batch_size, device = x.shape[0], x.device
+        
+        # Use time_steps from config if not provided
+        time_steps = self.time_steps if self.time_steps is not None else 2
         
         # Just flatten the input
         x = x.view(batch_size, -1)
@@ -182,7 +191,7 @@ class BasicRNN(nn.Module):
 
             for t in range(time_steps):
                 # Optionally only inject input every 2 steps
-                E_t = E if (t % 2 == 0) else torch.zeros_like(E)
+                E_t = E if (t % time_steps == 0) else torch.zeros_like(E)
 
                 S_next = self.activation(
                     S_state @ W_ss + E_t + I_state @ W_rs + O_state @ W_os
@@ -206,7 +215,7 @@ class BasicRNN(nn.Module):
             
             for t in range(time_steps):
                 # Optionally only inject input every 2 steps
-                E_t = E if (t % 2 == 0) else torch.zeros_like(E)
+                E_t = E if (t % time_steps == 0) else torch.zeros_like(E)
                 
                 # Update state using the whole matrix W
                 # E_t is projected to the full dimension
@@ -278,7 +287,8 @@ class BasicRNN(nn.Module):
             'lora_alpha': getattr(self, 'lora_alpha', 16),
             'sensory_type': getattr(self, 'sensory_type', 'visual'),
             'dropout_rate': getattr(self, 'dropout', nn.Dropout(0.2)).p,
-            'use_position_encoding': getattr(self, 'use_position_encoding', False)
+            'use_position_encoding': getattr(self, 'use_position_encoding', False),
+            'time_steps': self.time_steps
         }
         
         with open(os.path.join(path, 'model_config.pkl'), 'wb') as f:
@@ -320,6 +330,7 @@ class BasicRNN(nn.Module):
         sensory_type = config.get('sensory_type', 'visual')
         dropout_rate = config.get('dropout_rate', 0.2)
         use_position_encoding = config.get('use_position_encoding', False)
+        time_steps = config.get('time_steps', 5)
         
         # Create a new instance with the loaded parameters
         model = cls(
@@ -338,7 +349,8 @@ class BasicRNN(nn.Module):
             lora_alpha=lora_alpha,
             sensory_type=sensory_type,
             dropout_rate=dropout_rate,
-            use_position_encoding=use_position_encoding
+            use_position_encoding=use_position_encoding,
+            time_steps=time_steps
         )
         
         # Load the model state
