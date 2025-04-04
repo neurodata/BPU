@@ -23,6 +23,8 @@ class BasicRNN(nn.Module):
                  lora_alpha: float = 16,
                  dropout_rate: float = 0.2,
                  time_steps: int = 2,
+                 use_output_projection: bool = True,
+                 return_all_steps: bool = False,
                  ):
         """
         Unifies W_ss, W_sr, W_rs, W_rr, W_ro, W_or, W_so, W_oo, W_os into one
@@ -38,6 +40,10 @@ class BasicRNN(nn.Module):
         
         Time steps:
         - time_steps: Number of time steps for RNN forward pass
+        
+        Output projection:
+        - use_output_projection: Whether to project output to num_classes
+        - return_all_steps: Whether to return outputs at all time steps
         """
         super().__init__()
         
@@ -45,6 +51,8 @@ class BasicRNN(nn.Module):
         print(f"LoRA config: use_lora={use_lora}, rank={lora_rank}, alpha={lora_alpha}")
         print(f"Regularization: dropout_rate={dropout_rate}")
         print(f"Time steps: {time_steps}")
+        print(f"Output projection: {use_output_projection}")
+        print(f"Return all steps: {return_all_steps}")
         
         self.sensory_dim = sensory_dim
         self.internal_dim = internal_dim
@@ -52,6 +60,8 @@ class BasicRNN(nn.Module):
         self.total_dim = sensory_dim + internal_dim + output_dim
         self.sio = sio
         self.time_steps = time_steps
+        self.use_output_projection = use_output_projection
+        self.return_all_steps = return_all_steps
         
         self.pruning = pruning
         self.lambda_l1 = lambda_l1
@@ -93,10 +103,12 @@ class BasicRNN(nn.Module):
 
         if self.sio:
             self.input_proj = nn.Linear(input_dim, sensory_dim)
-            self.output_layer = nn.Linear(output_dim, num_classes)
+            if use_output_projection:
+                self.output_layer = nn.Linear(output_dim, num_classes)
         else:
             self.input_proj = nn.Linear(input_dim, self.total_dim)
-            self.output_layer = nn.Linear(self.total_dim, num_classes)
+            if use_output_projection:
+                self.output_layer = nn.Linear(self.total_dim, num_classes)
             
         self.activation = nn.ReLU()
         
@@ -190,6 +202,28 @@ class BasicRNN(nn.Module):
             # Input projection with dropout
             E = self.dropout(self.input_proj(x))
 
+            # If time_steps=1, ignore return_all_steps and just return the final output
+            if time_steps == 1:
+                # Single time step
+                E_t = E
+                S_next = self.activation(
+                    S_state @ W_ss + E_t + I_state @ W_rs + O_state @ W_os
+                )
+                I_next = self.activation(
+                    I_state @ W_rr + S_state @ W_sr + O_state @ W_or
+                )
+                O_next = self.activation(
+                    O_state @ W_oo + I_state @ W_ro + S_state @ W_so
+                )
+                
+                if self.use_output_projection:
+                    return self.output_layer(O_next)
+                return O_next
+
+            # Store outputs at each time step if requested
+            if self.return_all_steps:
+                all_outputs = []
+
             for t in range(time_steps):
                 # Optionally only inject input every 2 steps
                 E_t = E if (t % time_steps == 0) else torch.zeros_like(E)
@@ -206,13 +240,40 @@ class BasicRNN(nn.Module):
 
                 S_state, I_state, O_state = S_next, I_next, O_next
                 
-            return self.output_layer(O_state)
+                if self.return_all_steps:
+                    if self.use_output_projection:
+                        all_outputs.append(self.output_layer(O_state))
+                    else:
+                        all_outputs.append(O_state)
+            
+            if self.return_all_steps:
+                return torch.stack(all_outputs, dim=1)  # [batch_size, time_steps, output_dim/num_classes]
+            else:
+                if self.use_output_projection:
+                    return self.output_layer(O_state)
+                return O_state
         else:
             # Initialize state to zero
             state = torch.zeros(batch_size, self.total_dim, device=device)
             
             # Input projection with dropout
             E = self.dropout(self.input_proj(x))
+            
+            # If time_steps=1, ignore return_all_steps and just return the final output
+            if time_steps == 1:
+                # Single time step
+                E_t = E
+                state_next = self.activation(
+                    state @ W_eff + E_t
+                )
+                
+                if self.use_output_projection:
+                    return self.output_layer(state_next)
+                return state_next
+            
+            # Store outputs at each time step if requested
+            if self.return_all_steps:
+                all_outputs = []
             
             for t in range(time_steps):
                 # Optionally only inject input every 2 steps
@@ -224,9 +285,19 @@ class BasicRNN(nn.Module):
                     state @ W_eff + E_t
                 )
                 state = state_next
+                
+                if self.return_all_steps:
+                    if self.use_output_projection:
+                        all_outputs.append(self.output_layer(state))
+                    else:
+                        all_outputs.append(state)
             
-            # Use the whole state for output
-            return self.output_layer(state)
+            if self.return_all_steps:
+                return torch.stack(all_outputs, dim=1)  # [batch_size, time_steps, output_dim/num_classes]
+            else:
+                if self.use_output_projection:
+                    return self.output_layer(state)
+                return state
 
     def get_l1_loss(self):
         """Compute L1 regularization loss on base weights only"""
@@ -289,7 +360,9 @@ class BasicRNN(nn.Module):
             'sensory_type': getattr(self, 'sensory_type', 'visual'),
             'dropout_rate': getattr(self, 'dropout', nn.Dropout(0.2)).p,
             'use_position_encoding': getattr(self, 'use_position_encoding', False),
-            'time_steps': self.time_steps
+            'time_steps': self.time_steps,
+            'use_output_projection': self.use_output_projection,
+            'return_all_steps': self.return_all_steps
         }
         
         with open(os.path.join(path, 'model_config.pkl'), 'wb') as f:
@@ -332,6 +405,8 @@ class BasicRNN(nn.Module):
         dropout_rate = config.get('dropout_rate', 0.2)
         use_position_encoding = config.get('use_position_encoding', False)
         time_steps = config.get('time_steps', 5)
+        use_output_projection = config.get('use_output_projection', True)
+        return_all_steps = config.get('return_all_steps', False)
         
         # Create a new instance with the loaded parameters
         model = cls(
@@ -351,7 +426,9 @@ class BasicRNN(nn.Module):
             sensory_type=sensory_type,
             dropout_rate=dropout_rate,
             use_position_encoding=use_position_encoding,
-            time_steps=time_steps
+            time_steps=time_steps,
+            use_output_projection=use_output_projection,
+            return_all_steps=return_all_steps
         )
         
         # Load the model state
@@ -470,6 +547,7 @@ class MultiSensoryRNN(nn.Module):
                  trainable: bool = False,
                  dropout_rate: float = 0.2,
                  time_steps: dict = None,  # Dictionary mapping sensory type to time steps
+                 pooling_type: str = 'max',  # Options: 'max', 'mean', 'attention'
                  ):
         """
         Multi-sensory fusion RNN architecture with max pooling.
@@ -483,11 +561,13 @@ class MultiSensoryRNN(nn.Module):
             trainable: Whether RNN weights are trainable
             dropout_rate: Dropout rate
             time_steps: Dictionary mapping sensory type to number of time steps
+            pooling_type: Type of pooling to use for temporal outputs ('max', 'mean', or 'attention')
         """
         super().__init__()
         
         self.sensory_dims = sensory_dims
         self.time_steps = time_steps or {sensory_type: 2 for sensory_type in sensory_dims.keys()}
+        self.pooling_type = pooling_type
         
         # Initialize RNN modules for each sensory channel
         self.sensory_rnns = nn.ModuleDict()
@@ -505,16 +585,35 @@ class MultiSensoryRNN(nn.Module):
                 sensory_dim=sensory_dim,  # Use actual sensory dimension
                 internal_dim=internal_dim,
                 output_dim=output_dim,
-                num_classes=num_classes,  # This will be the output dimension of the RNN
+                num_classes=num_classes,
                 sio=sio,
                 trainable=trainable,
                 pruning=False,
                 dropout_rate=dropout_rate,
-                time_steps=self.time_steps[sensory_type]
+                time_steps=self.time_steps[sensory_type],
+                use_output_projection=True,  # Enable output projection in individual RNNs
+                return_all_steps=True  # Enable returning outputs at all time steps
             )
         
-        # Final projection layer
-        self.final_projection = nn.Linear(num_classes, num_classes)
+        # Get the output dimension from the first sensory RNN
+        first_sensory_type = next(iter(sensory_dims.keys()))
+        
+        # Attention mechanism for spatial attention (across sensory types)
+        self.spatial_attention = nn.Sequential(
+            nn.Linear(num_classes, num_classes),  # Query transformation
+            nn.ReLU(),
+            nn.Dropout(dropout_rate),
+            nn.Linear(num_classes, 1)  # Attention scores
+        )
+        
+        # Attention mechanism for temporal attention (across time steps)
+        if pooling_type == 'attention':
+            self.temporal_attention = nn.Sequential(
+                nn.Linear(num_classes, num_classes),  # Query transformation
+                nn.ReLU(),
+                nn.Dropout(dropout_rate),
+                nn.Linear(num_classes, 1)  # Attention scores
+            )
     
     def get_sensory_output(self, x, sensory_type):
         """
@@ -524,9 +623,31 @@ class MultiSensoryRNN(nn.Module):
             x: Input tensor
             sensory_type: Type of sensory input
         Returns:
-            RNN output
+            RNN output at all time steps [batch_size, time_steps, num_classes]
         """
         return self.sensory_rnns[sensory_type](x)
+    
+    def pool_temporal_outputs(self, temporal_outputs):
+        """
+        Pool outputs across time steps.
+        
+        Args:
+            temporal_outputs: Tensor of shape [batch_size, time_steps, num_classes]
+        Returns:
+            Pooled output of shape [batch_size, num_classes]
+        """
+        if self.pooling_type == 'max':
+            return torch.max(temporal_outputs, dim=1)[0]
+        elif self.pooling_type == 'mean':
+            return torch.mean(temporal_outputs, dim=1)
+        elif self.pooling_type == 'attention':
+            # Calculate attention scores for each time step
+            attention_scores = self.temporal_attention(temporal_outputs)  # [batch_size, time_steps, 1]
+            attention_weights = F.softmax(attention_scores, dim=1)  # [batch_size, time_steps, 1]
+            # Apply attention weights
+            return torch.sum(temporal_outputs * attention_weights, dim=1)  # [batch_size, num_classes]
+        else:
+            raise ValueError(f"Unknown pooling type: {self.pooling_type}")
     
     def forward(self, x_dict):
         """
@@ -537,18 +658,17 @@ class MultiSensoryRNN(nn.Module):
         Returns:
             Classification logits
         """
-        # Process each sensory input and get outputs
+        # Process each sensory input and get outputs at all time steps
         outputs = []
         for sensory_type, x in x_dict.items():
-            output = self.get_sensory_output(x, sensory_type)
-            outputs.append(output)
+            temporal_outputs = self.get_sensory_output(x, sensory_type)
+            pooled_output = self.pool_temporal_outputs(temporal_outputs)
+            outputs.append(pooled_output)
         
-        # Stack outputs along a new dimension
         stacked_outputs = torch.stack(outputs, dim=1)  # [batch_size, num_sensory, num_classes]
         
-        # Apply max pooling over sensory outputs
-        pooled_output = torch.max(stacked_outputs, dim=1)[0]  # [batch_size, num_classes]
+        attention_scores = self.spatial_attention(stacked_outputs)  # [batch_size, num_sensory, 1]
+        attention_weights = F.softmax(attention_scores, dim=1)  # [batch_size, num_sensory, 1]
+        attended_output = torch.sum(stacked_outputs * attention_weights, dim=1)  # [batch_size, num_classes]
         
-        # Final projection
-        logits = self.final_projection(pooled_output)
-        return logits   
+        return attended_output   

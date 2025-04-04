@@ -10,7 +10,7 @@ num_trials: 3
 num_epochs: 10
 batch_size: 64
 learning_rate: 0.003
-dropout_rate: 0.05
+dropout_rate: 0.1
 
 # Paths for connectivity data
 csv_paths:
@@ -26,7 +26,7 @@ experiments:
   # Multi-Sensory Fusion Experiments
   # ------------------------------------------------------------------------------------------------
   
-  MultiSensory_Fusion:
+  MultiSensory_Temporal_Fusion:
     type: multisensoryrnn
     trainable: false
     init: droso
@@ -39,8 +39,8 @@ experiments:
     time_steps:
       visual: 4
       olfactory: 3
-      gustatory-external: 2
-      respiratory: 3
+      gustatory-external: 3
+      respiratory: 2
       gut: 2
     embedding_dim: 128
     decision_hidden_dim: 256

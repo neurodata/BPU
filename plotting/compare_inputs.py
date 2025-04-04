@@ -1,4 +1,5 @@
 import os
+import re
 import pickle
 import numpy as np
 import matplotlib.pyplot as plt
@@ -22,7 +23,8 @@ SENSORY_COLORS = {
     "Gut": "#4DAF4A",               # Green
     "Respiratory": "#984EA3",       # Purple
     "Gustatory-External": "#FF7F00", # Orange
-    "All Sensory": "#000000"        # Black
+    "All Sensory": "#000000",        # Black
+    "Multi-Sensory": "#FF00FF"      # Pink
 }
 
 def load_sensory_comparison_results():
@@ -39,7 +41,8 @@ def load_sensory_comparison_results():
         "Unlearnable_Gut_DPU": "Gut",
         "Unlearnable_Respiratory_DPU": "Respiratory",
         "Unlearnable_Gustatory_DPU": "Gustatory-External",
-        "Unlearnable_All_Sensory_DPU": "All Sensory"
+        "Unlearnable_All_Sensory_DPU": "All Sensory",
+        "MultiSensory_Fusion": "Multi-Sensory"
     }
     
     # Count neurons for each sensory type to enhance the labels
@@ -48,7 +51,7 @@ def load_sensory_comparison_results():
     for fname in os.listdir(RESULTS_DIR):
         # Check if file matches the new format (e.g., Unlearnable_Visual_DPU_trial1.signed.pkl)
         for exp_name, sensory_type in experiment_to_type.items():
-            if fname.startswith(exp_name) and fname.endswith('.signed.pkl'):
+            if re.match(f"^{exp_name}.*(?<!fewshot)\\.signed\\.pkl$", fname):
                 with open(os.path.join(RESULTS_DIR, fname), "rb") as f:
                     results = pickle.load(f)
                     
@@ -78,10 +81,41 @@ def plot_sensory_comparison():
     
     data = load_sensory_comparison_results()
     
+    # Custom legend names mapping
+    custom_legend_names = {
+        "Visual": "Visual (29 neurons, 4 timesteps)",
+        "Olfactory": "Olfactory (42 neurons, 3 timesteps)",
+        "Gut": "Gut (85 neurons, 3 timesteps)",
+        "Respiratory": "Respiratory (26 neurons, 2 timesteps)",
+        "Gustatory-External": "Gustatory-External (131 neurons, 3 timesteps)",
+        "All Sensory": "All Sensory (430 neurons, 2 timesteps)",
+        "Multi-Sensory": "Multi-Sensory"
+    }
+    
+    # Define custom order for plotting
+    custom_order = [
+        "Multi-Sensory",
+        "All Sensory",
+        "Gustatory-External",
+        "Gut",
+        "Olfactory",
+        "Visual",
+        "Respiratory",
+    ]
+    
+    # Sort data according to custom order
+    sorted_data = sorted(data.items(), 
+                        key=lambda x: custom_order.index(x[0].split(" (")[0]) 
+                        if x[0].split(" (")[0] in custom_order 
+                        else len(custom_order))
+    
     # Plot each sensory type
-    for i, (sensory_label, results_list) in enumerate(sorted(data.items())):
+    for i, (sensory_label, results_list) in enumerate(sorted_data):
         # Extract the base sensory type from the enhanced label (e.g., "Visual (123 neurons)" -> "Visual")
         base_sensory_type = sensory_label.split(" (")[0] 
+        
+        # Use custom legend name if available, otherwise use the original label
+        legend_name = custom_legend_names.get(sensory_label, sensory_label)
         
         # Extract accuracy values from each result dictionary
         acc_values = []
@@ -118,7 +152,7 @@ def plot_sensory_comparison():
         plt.plot(
             x, mean,
             color=color,
-            label=sensory_label,
+            label=legend_name,  # Use custom legend name
             linewidth=2.5
         )
         
@@ -137,8 +171,15 @@ def plot_sensory_comparison():
     plt.xticks(fontsize=20)
     plt.yticks(fontsize=20)
     
-    plt.legend(loc='lower right', fontsize=12)
-    plt.title("Performance Comparison Across Different Sensory Input Types", fontsize=20, pad=20)
+    legend = plt.legend(
+        loc='center left',           
+        bbox_to_anchor=(1.02, 0.5),   
+        ncol=1,                    
+        frameon=False,
+        fontsize=24,
+        borderaxespad=1.0       
+    )
+
     
     # Create figures directory if it doesn't exist
     figures_dir = os.path.join(PROJECT_ROOT, "plotting", "figures")
