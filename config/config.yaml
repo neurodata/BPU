@@ -4,13 +4,13 @@ signed: true
 sio: true # sio: sensory-interneuron-output
 fewshot:
   enabled: false # options: true for  few-shot training, false for full training
-  samples: 120 # options: 60 for 1%, 120 for 2%, 300 for 5%, 600 for 10%
+  samples: 60 # options: 60 for 1%, 120 for 2%, 300 for 5%, 600 for 10%
   batch_size: 17
 num_trials: 3
 num_epochs: 10
 batch_size: 64
 learning_rate: 0.003
-dropout_rate: 0.2
+dropout_rate: 0.05
 
 # Paths for connectivity data
 csv_paths:
@@ -21,6 +21,30 @@ rescale_factor: 0.04
 
 # Experiment definitions
 experiments:  
+
+  # ------------------------------------------------------------------------------------------------
+  # Multi-Sensory Fusion Experiments
+  # ------------------------------------------------------------------------------------------------
+  
+  MultiSensory_Fusion:
+    type: multisensoryrnn
+    trainable: false
+    init: droso
+    sensory_types:  # List of sensory types to use
+      - visual
+      - olfactory
+      - gustatory-external
+      - respiratory
+      - gut
+    time_steps:
+      visual: 4
+      olfactory: 3
+      gustatory-external: 2
+      respiratory: 3
+      gut: 2
+    embedding_dim: 128
+    decision_hidden_dim: 256
+
   # ------------------------------------------------------------------------------------------------
   # Main Experiments
   # ------------------------------------------------------------------------------------------------
@@ -237,12 +261,12 @@ experiments:
   # ------------------------------------------------------------------------------------------------
 
   # # Olfactory Sensory Input
-  Unlearnable_Olfactory_DPU:
-    type: basicrnn
-    trainable: false
-    init: droso
-    sensory_type: olfactory
-    time_steps: 3  # Number of time steps for RNN forward pass
+  # Unlearnable_Olfactory_DPU:
+  #   type: basicrnn
+  #   trainable: false
+  #   init: droso
+  #   sensory_type: olfactory
+  #   time_steps: 3  # Number of time steps for RNN forward pass
 
   # # Visual Sensory Input
   # Unlearnable_Visual_DPU:

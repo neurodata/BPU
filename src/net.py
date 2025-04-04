@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import os
 import pickle
+import numpy as np
 
 class BasicRNN(nn.Module):
     def __init__(self, 
@@ -458,3 +459,96 @@ class TwoHiddenMLP(nn.Module):
         hidden2 = self.relu(torch.matmul(hidden1, self.hidden1_to_hidden2))
         output = self.hidden2_to_output(hidden2)
         return output   
+
+class MultiSensoryRNN(nn.Module):
+    def __init__(self, 
+                 W_init_dict: dict,  # Dictionary mapping sensory type to W_init and dimensions
+                 input_dim: int,
+                 sensory_dims: dict,  # Dictionary mapping sensory type to dimension
+                 num_classes: int,
+                 sio: bool = True,
+                 trainable: bool = False,
+                 dropout_rate: float = 0.2,
+                 time_steps: dict = None,  # Dictionary mapping sensory type to time steps
+                 ):
+        """
+        Multi-sensory fusion RNN architecture with max pooling.
+        
+        Args:
+            W_init_dict: Dictionary mapping sensory type to W_init matrix and dimensions
+            input_dim: Input dimension for each sensory channel
+            sensory_dims: Dictionary mapping sensory type to dimension
+            num_classes: Number of output classes
+            sio: Whether to use SIO architecture
+            trainable: Whether RNN weights are trainable
+            dropout_rate: Dropout rate
+            time_steps: Dictionary mapping sensory type to number of time steps
+        """
+        super().__init__()
+        
+        self.sensory_dims = sensory_dims
+        self.time_steps = time_steps or {sensory_type: 2 for sensory_type in sensory_dims.keys()}
+        
+        # Initialize RNN modules for each sensory channel
+        self.sensory_rnns = nn.ModuleDict()
+        for sensory_type in sensory_dims.keys():
+            # Get the pre-computed W_init and dimensions for this sensory type
+            sensory_config = W_init_dict[sensory_type]
+            W_init = sensory_config['W_init']
+            sensory_dim = sensory_config['sensory_dim']  # Use actual sensory dimension from connectome
+            internal_dim = sensory_config['internal_dim']
+            output_dim = sensory_config['output_dim']
+            
+            self.sensory_rnns[sensory_type] = BasicRNN(
+                W_init=W_init,
+                input_dim=input_dim,
+                sensory_dim=sensory_dim,  # Use actual sensory dimension
+                internal_dim=internal_dim,
+                output_dim=output_dim,
+                num_classes=num_classes,  # This will be the output dimension of the RNN
+                sio=sio,
+                trainable=trainable,
+                pruning=False,
+                dropout_rate=dropout_rate,
+                time_steps=self.time_steps[sensory_type]
+            )
+        
+        # Final projection layer
+        self.final_projection = nn.Linear(num_classes, num_classes)
+    
+    def get_sensory_output(self, x, sensory_type):
+        """
+        Process input through a sensory RNN and return output.
+        
+        Args:
+            x: Input tensor
+            sensory_type: Type of sensory input
+        Returns:
+            RNN output
+        """
+        return self.sensory_rnns[sensory_type](x)
+    
+    def forward(self, x_dict):
+        """
+        Forward pass through the multi-sensory network.
+        
+        Args:
+            x_dict: Dictionary mapping sensory type to input tensor
+        Returns:
+            Classification logits
+        """
+        # Process each sensory input and get outputs
+        outputs = []
+        for sensory_type, x in x_dict.items():
+            output = self.get_sensory_output(x, sensory_type)
+            outputs.append(output)
+        
+        # Stack outputs along a new dimension
+        stacked_outputs = torch.stack(outputs, dim=1)  # [batch_size, num_sensory, num_classes]
+        
+        # Apply max pooling over sensory outputs
+        pooled_output = torch.max(stacked_outputs, dim=1)[0]  # [batch_size, num_classes]
+        
+        # Final projection
+        logits = self.final_projection(pooled_output)
+        return logits   
