@@ -242,19 +242,6 @@ def run_training_loop(model, config, full_train_set, test_loader, exp_id, trial_
 
     return results
 
-def save_results(exp_id, config, trial_num, results, signed):
-    os.makedirs(result_path, exist_ok=True)
-    filename = f"{exp_id}_trial{trial_num}"
-    if "fewshot" in config:
-        filename = f"{exp_id}_trial{trial_num}"
-    if not sio:
-        filename += ".whole"
-    if signed:
-        filename += ".signed"
-    filename += ".pkl"
-    with open(os.path.join(result_path, filename), "wb") as f:
-        pickle.dump(results, f)
-
 def train_experiment(exp_id, config, trial_num):
     print("========================================")
     print(f"Starting Experiment: {exp_id} Trial {trial_num}")
@@ -269,11 +256,57 @@ def train_experiment(exp_id, config, trial_num):
     data_loader = DataLoader(batch_size=batch_size)
     full_train_set, test_loader = data_loader.load_data()
     
-    model = initialize_model(config)
-    model.to(device)
-    results = run_training_loop(model, config, full_train_set, test_loader, exp_id, trial_num,
-                              num_epochs, batch_size, fewshot_batch_size)
-    save_results(exp_id, config, trial_num, results, signed)
+    # Check if SVD is enabled and if this experiment uses SVD-based initialization
+    svd_enabled = config_data.get('svd', {}).get('enabled', False)
+    uses_svd_init = config.get('init') in ['same_eigenvalues_same_eigenvectors', 
+                                         'same_eigenvalues_random_eigenvectors',
+                                         'random_eigenvalues_same_eigenvectors',
+                                         'identical_eigenvalues_same_eigenvectors',
+                                         'random_eigenvalues_random_eigenvectors']
+    
+    if svd_enabled and uses_svd_init:
+        # Get variance thresholds from config
+        variance_thresholds = config_data.get('svd', {}).get('variance_thresholds', [1.0])
+        
+        # Store results for each variance threshold
+        all_results = {}
+        
+        for variance in variance_thresholds:
+            print(f"\nRunning with variance threshold: {variance}")
+            # Create a copy of config with current variance
+            current_config = config.copy()
+            current_config['explained_variance'] = variance
+            
+            model = initialize_model(current_config)
+            model.to(device)
+            results = run_training_loop(model, current_config, full_train_set, test_loader, exp_id, trial_num,
+                                      num_epochs, batch_size, fewshot_batch_size)
+            
+            # Store results with variance as key
+            all_results[variance] = results
+        
+        # Save all results
+        save_results(exp_id, config, trial_num, all_results, signed)
+    else:
+        # Original logic for non-SVD experiments
+        model = initialize_model(config)
+        model.to(device)
+        results = run_training_loop(model, config, full_train_set, test_loader, exp_id, trial_num,
+                                  num_epochs, batch_size, fewshot_batch_size)
+        save_results(exp_id, config, trial_num, results, signed)
+
+def save_results(exp_id, config, trial_num, results, signed):
+    os.makedirs(result_path, exist_ok=True)
+    filename = f"{exp_id}_trial{trial_num}"
+    if "fewshot" in config:
+        filename = f"{exp_id}_trial{trial_num}"
+    if not sio:
+        filename += ".whole"
+    if signed:
+        filename += ".signed"
+    filename += ".pkl"
+    with open(os.path.join(result_path, filename), "wb") as f:
+        pickle.dump(results, f)
 
 if __name__ == "__main__":
     for exp_id, config in experiments.items():

@@ -3,7 +3,7 @@ result_path: "results"  # Path to save results and models
 signed: true
 sio: true # sio: sensory-interneuron-output
 fewshot:
-  enabled: false # options: true for  few-shot training, false for full training
+  enabled: true # options: true for  few-shot training, false for full training
   samples: 60 # options: 60 for 1%, 120 for 2%, 300 for 5%, 600 for 10%
   batch_size: 17
 num_trials: 3
@@ -11,6 +11,11 @@ num_epochs: 10
 batch_size: 64
 learning_rate: 0.003
 dropout_rate: 0.1
+
+# SVD configuration
+svd:
+  enabled: true
+  variance_thresholds: [0.95, 0.9, 0.8, 0.5, 0.1, 0.01]
 
 # Paths for connectivity data
 csv_paths:
@@ -26,24 +31,24 @@ experiments:
   # Multi-Sensory Fusion Experiments
   # ------------------------------------------------------------------------------------------------
   
-  MultiSensory_Temporal_Fusion:
-    type: multisensoryrnn
-    trainable: false
-    init: droso
-    sensory_types:  # List of sensory types to use
-      - visual
-      - olfactory
-      - gustatory-external
-      - respiratory
-      - gut
-    time_steps:
-      visual: 4
-      olfactory: 3
-      gustatory-external: 3
-      respiratory: 2
-      gut: 2
-    embedding_dim: 128
-    decision_hidden_dim: 256
+  # MultiSensory_Temporal_Fusion:
+  #   type: multisensoryrnn
+  #   trainable: false
+  #   init: droso
+  #   sensory_types:  # List of sensory types to use
+  #     - visual
+  #     - olfactory
+  #     - gustatory-external
+  #     - respiratory
+  #     - gut
+  #   time_steps:
+  #     visual: 4
+  #     olfactory: 3
+  #     gustatory-external: 3
+  #     respiratory: 2
+  #     gut: 2
+  #   embedding_dim: 128
+  #   decision_hidden_dim: 256
 
   # ------------------------------------------------------------------------------------------------
   # Main Experiments
@@ -210,45 +215,40 @@ experiments:
   #   trainable: false
   #   init: eigenvalue_permuted
 
-  # # # # 15. Unlearnable RNN with same eigenvalues and same eigenvectors initialization
-  # Unlearnable_RNN_Low_Rank:
-  #   type: basicrnn
-  #   trainable: false
-  #   init: same_eigenvalues_same_eigenvectors
-  #   sensory_type: all
-  #   explained_variance: 0.1
+  # # # 15. Unlearnable RNN with same eigenvalues and same eigenvectors initialization
+  Unlearnable_RNN_Low_Rank:
+    type: basicrnn
+    trainable: false
+    init: same_eigenvalues_same_eigenvectors
+    sensory_type: all
 
-  # # # 16. Unlearnable RNN with same eigenvalues and random eigenvectors initialization
-  # Unlearnable_RNN_Random_Structure_Same_Spectrum:
-  #   type: basicrnn
-  #   trainable: false
-  #   init: same_eigenvalues_random_eigenvectors
-  #   sensory_type: all
-  #   explained_variance: 0.1
+  # # 16. Unlearnable RNN with same eigenvalues and random eigenvectors initialization
+  Unlearnable_RNN_Random_Structure_Same_Spectrum:
+    type: basicrnn
+    trainable: false
+    init: same_eigenvalues_random_eigenvectors
+    sensory_type: all
 
-  # # # 17. Unlearnable RNN with random eigenvalues and same eigenvectors initialization
-  # Unlearnable_RNN_Random_Singular_Values:
-  #   type: basicrnn
-  #   trainable: false
-  #   init: random_eigenvalues_same_eigenvectors
-  #   sensory_type: all
-  #   explained_variance: 0.1
+  # # 17. Unlearnable RNN with random eigenvalues and same eigenvectors initialization
+  Unlearnable_RNN_Random_Singular_Values:
+    type: basicrnn
+    trainable: false
+    init: random_eigenvalues_same_eigenvectors
+    sensory_type: all
 
-  # # # 18. Unlearnable RNN with identical eigenvalues and same eigenvectors initialization
-  # Unlearnable_RNN_Identical_Singular_Values:
-  #   type: basicrnn
-  #   trainable: false
-  #   init: identical_eigenvalues_same_eigenvectors
-  #   sensory_type: all
-  #   explained_variance: 0.1
+  # # 18. Unlearnable RNN with identical eigenvalues and same eigenvectors initialization
+  Unlearnable_RNN_Identical_Singular_Values:
+    type: basicrnn
+    trainable: false
+    init: identical_eigenvalues_same_eigenvectors
+    sensory_type: all
 
-  # # # 19. Unlearnable RNN with random eigenvalues and random eigenvectors initialization
-  # Unlearnable_RNN_Random_Singular_Values_Random_Spectrum:
-  #   type: basicrnn
-  #   trainable: false
-  #   init: random_eigenvalues_random_eigenvectors
-  #   sensory_type: all
-  #   explained_variance: 0.1
+  # # 19. Unlearnable RNN with random eigenvalues and random eigenvectors initialization
+  Unlearnable_RNN_Random_Singular_Values_Random_Spectrum:
+    type: basicrnn
+    trainable: false
+    init: random_eigenvalues_random_eigenvectors
+    sensory_type: all
 
   # ------------------------------------------------------------------------------------------------
   # Sensory Type Experiments, using the same model as the main experiments, but with different sensory inputs, which includes:

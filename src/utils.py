@@ -1,4 +1,31 @@
 import numpy as np
+from functools import lru_cache
+
+# Cache for SVD results
+_svd_cache = {}
+
+def get_svd_components(base, explained_variance):
+    """
+    Compute SVD components for a given matrix and cache the results.
+    """
+    cache_key = (id(base), explained_variance)
+    if cache_key in _svd_cache:
+        return _svd_cache[cache_key]
+    
+    U, s, Vt = np.linalg.svd(base, full_matrices=False)
+    
+    # For variance=1.0, we should use all non-zero singular values
+    if explained_variance == 1.0:
+        # Use machine epsilon to determine which singular values are effectively zero
+        eps = np.finfo(s.dtype).eps
+        n_components = np.sum(s > eps * s[0])
+    else:
+        explained_variance_ratio = np.cumsum(s**2) / np.sum(s**2)
+        n_components = np.argmax(explained_variance_ratio >= explained_variance) + 1
+    
+    result = (U, s, Vt, n_components)
+    _svd_cache[cache_key] = result
+    return result
 
 def get_weight_matrix(base, mode, explained_variance=0.1):
     """
@@ -119,13 +146,13 @@ def get_weight_matrix(base, mode, explained_variance=0.1):
         return (reconstructed * scaling_factor).astype(np.float32).copy()
     
     elif mode == 'same_eigenvalues_same_eigenvectors':
-        # Perform SVD decomposition
-        U, s, Vt = np.linalg.svd(base, full_matrices=False)
-
-        # Compute cumulative variance
-        explained_variance = np.cumsum(s**2) / np.sum(s**2)
-        n_components = np.argmax(explained_variance >= explained_variance) + 1
+        # Get cached SVD components
+        U, s, Vt, n_components = get_svd_components(base, explained_variance)
         print(f"Number of components: {n_components}")
+
+        # For variance=1.0, we should return the original matrix
+        if explained_variance == 1.0:
+            return base.copy()
 
         # Reconstruct with top-k components
         U_k = U[:, :n_components]
@@ -136,12 +163,9 @@ def get_weight_matrix(base, mode, explained_variance=0.1):
         return low_rank_matrix.astype(np.float32).copy()
     
     elif mode == 'same_eigenvalues_random_eigenvectors':
-        # First compute the number of components needed
-        U, s, Vt = np.linalg.svd(base, full_matrices=False)
-        explained_variance = np.cumsum(s**2) / np.sum(s**2)
-        n_components = np.argmax(explained_variance >= 0.1) + 1
+        # Get cached SVD components
+        U, s, Vt, n_components = get_svd_components(base, explained_variance)
         print(f"Number of components: {n_components}")
-
         S_k = np.diag(s[:n_components])
         n = base.shape[0]
 
@@ -153,14 +177,10 @@ def get_weight_matrix(base, mode, explained_variance=0.1):
         return random_structure_matrix.astype(np.float32).copy()
     
     elif mode == 'random_eigenvalues_same_eigenvectors':
-        # Perform SVD decomposition
-        U, s, Vt = np.linalg.svd(base, full_matrices=False)
-        
-        # Compute number of components needed for 99% variance
-        explained_variance = np.cumsum(s**2) / np.sum(s**2)
-        n_components = np.argmax(explained_variance >= 0.1) + 1
+        # Get cached SVD components
+        U, s, Vt, n_components = get_svd_components(base, explained_variance)
         print(f"Number of components: {n_components}")
-        
+     
         # Keep original U and V, but randomize singular values
         # Generate random singular values with similar distribution
         s_mean = np.mean(s[:n_components])
@@ -180,12 +200,9 @@ def get_weight_matrix(base, mode, explained_variance=0.1):
         return random_singular_matrix.astype(np.float32).copy()
     
     elif mode == 'random_eigenvalues_random_eigenvectors':
-        # Perform SVD decomposition
-        U, s, Vt = np.linalg.svd(base, full_matrices=False)
-        
-        # Compute number of components needed for 99% variance
-        explained_variance = np.cumsum(s**2) / np.sum(s**2)
-        n_components = np.argmax(explained_variance >= 0.1) + 1
+        # Get cached SVD components
+        U, s, Vt, n_components = get_svd_components(base, explained_variance)
+        print(f"Number of components: {n_components}")
         
         # Keep original U and V, but randomize singular values
         # Generate random singular values with similar distribution
@@ -208,14 +225,10 @@ def get_weight_matrix(base, mode, explained_variance=0.1):
         return random_structure_matrix.astype(np.float32).copy()
     
     elif mode == 'identical_eigenvalues_same_eigenvectors':
-        # Perform SVD decomposition
-        U, s, Vt = np.linalg.svd(base, full_matrices=False)
-        
-        # Compute number of components needed for 99% variance
-        explained_variance = np.cumsum(s**2) / np.sum(s**2)
-        n_components = np.argmax(explained_variance >= 0.1) + 1
+        # Get cached SVD components
+        U, s, Vt, n_components = get_svd_components(base, explained_variance)
         print(f"Number of components: {n_components}")
-        
+
         # Create diagonal matrix with all ones for singular values
         S_ones = np.diag(np.ones(n_components))
         

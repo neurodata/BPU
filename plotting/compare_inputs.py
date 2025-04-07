@@ -24,7 +24,7 @@ SENSORY_COLORS = {
     "Respiratory": "#984EA3",       # Purple
     "Gustatory-External": "#FF7F00", # Orange
     "All Sensory": "#000000",        # Black
-    "Multi-Sensory": "#FF00FF"      # Pink
+    "Multi-Sensory-Temporal": "#E377C2"   # Pink
 }
 
 def load_sensory_comparison_results():
@@ -42,7 +42,7 @@ def load_sensory_comparison_results():
         "Unlearnable_Respiratory_DPU": "Respiratory",
         "Unlearnable_Gustatory_DPU": "Gustatory-External",
         "Unlearnable_All_Sensory_DPU": "All Sensory",
-        "MultiSensory_Fusion": "Multi-Sensory"
+        "MultiSensory_Temporal_Fusion": "Multi-Sensory-Temporal"
     }
     
     # Count neurons for each sensory type to enhance the labels
@@ -85,16 +85,16 @@ def plot_sensory_comparison():
     custom_legend_names = {
         "Visual": "Visual (29 neurons, 4 timesteps)",
         "Olfactory": "Olfactory (42 neurons, 3 timesteps)",
-        "Gut": "Gut (85 neurons, 3 timesteps)",
+        "Gut": "Gut (85 neurons, 2 timesteps)",
         "Respiratory": "Respiratory (26 neurons, 2 timesteps)",
         "Gustatory-External": "Gustatory-External (131 neurons, 3 timesteps)",
         "All Sensory": "All Sensory (430 neurons, 2 timesteps)",
-        "Multi-Sensory": "Multi-Sensory"
+        "Multi-Sensory-Temporal": "Multi-Sensory + Temporal Attention"
     }
     
     # Define custom order for plotting
     custom_order = [
-        "Multi-Sensory",
+        "Multi-Sensory-Temporal",
         "All Sensory",
         "Gustatory-External",
         "Gut",
@@ -177,6 +177,7 @@ def plot_sensory_comparison():
         ncol=1,                    
         frameon=False,
         fontsize=24,
+        labelspacing=1.2,
         borderaxespad=1.0       
     )
 

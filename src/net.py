@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import os
 import pickle
-import numpy as np
 
 class BasicRNN(nn.Module):
     def __init__(self, 
@@ -225,7 +224,6 @@ class BasicRNN(nn.Module):
                 all_outputs = []
 
             for t in range(time_steps):
-                # Optionally only inject input every 2 steps
                 E_t = E if (t % time_steps == 0) else torch.zeros_like(E)
 
                 S_next = self.activation(
@@ -259,28 +257,13 @@ class BasicRNN(nn.Module):
             # Input projection with dropout
             E = self.dropout(self.input_proj(x))
             
-            # If time_steps=1, ignore return_all_steps and just return the final output
-            if time_steps == 1:
-                # Single time step
-                E_t = E
-                state_next = self.activation(
-                    state @ W_eff + E_t
-                )
-                
-                if self.use_output_projection:
-                    return self.output_layer(state_next)
-                return state_next
-            
             # Store outputs at each time step if requested
             if self.return_all_steps:
                 all_outputs = []
             
             for t in range(time_steps):
-                # Optionally only inject input every 2 steps
                 E_t = E if (t % time_steps == 0) else torch.zeros_like(E)
                 
-                # Update state using the whole matrix W
-                # E_t is projected to the full dimension
                 state_next = self.activation(
                     state @ W_eff + E_t
                 )
@@ -444,6 +427,140 @@ class BasicRNN(nn.Module):
                 
         return model, metadata
 
+class MultiSensoryRNN(nn.Module):
+    def __init__(self, 
+                 W_init_dict: dict,  # Dictionary mapping sensory type to W_init and dimensions
+                 input_dim: int,
+                 sensory_dims: dict,  # Dictionary mapping sensory type to dimension
+                 num_classes: int,
+                 sio: bool = True,
+                 trainable: bool = False,
+                 dropout_rate: float = 0.2,
+                 time_steps: dict = None,  # Dictionary mapping sensory type to time steps
+                 pooling_type: str = 'max',  # Options: 'max', 'mean', 'attention'
+                 ):
+        """
+        Multi-sensory fusion RNN architecture with max pooling.
+        
+        Args:
+            W_init_dict: Dictionary mapping sensory type to W_init matrix and dimensions
+            input_dim: Input dimension for each sensory channel
+            sensory_dims: Dictionary mapping sensory type to dimension
+            num_classes: Number of output classes
+            sio: Whether to use SIO architecture
+            trainable: Whether RNN weights are trainable
+            dropout_rate: Dropout rate
+            time_steps: Dictionary mapping sensory type to number of time steps
+            pooling_type: Type of pooling to use for temporal outputs ('max', 'mean', or 'attention')
+        """
+        super().__init__()
+        
+        self.sensory_dims = sensory_dims
+        self.time_steps = time_steps or {sensory_type: 2 for sensory_type in sensory_dims.keys()}
+        self.pooling_type = pooling_type
+        
+        # Initialize RNN modules for each sensory channel
+        self.sensory_rnns = nn.ModuleDict()
+        for sensory_type in sensory_dims.keys():
+            # Get the pre-computed W_init and dimensions for this sensory type
+            sensory_config = W_init_dict[sensory_type]
+            W_init = sensory_config['W_init']
+            sensory_dim = sensory_config['sensory_dim']  # Use actual sensory dimension from connectome
+            internal_dim = sensory_config['internal_dim']
+            output_dim = sensory_config['output_dim']
+            
+            self.sensory_rnns[sensory_type] = BasicRNN(
+                W_init=W_init,
+                input_dim=input_dim,
+                sensory_dim=sensory_dim,  # Use actual sensory dimension
+                internal_dim=internal_dim,
+                output_dim=output_dim,
+                num_classes=num_classes,
+                sio=sio,
+                trainable=trainable,
+                pruning=False,
+                dropout_rate=dropout_rate,
+                time_steps=self.time_steps[sensory_type],
+                use_output_projection=True,  # Enable output projection in individual RNNs
+                return_all_steps=True  # Enable returning outputs at all time steps
+            )
+        
+        # Attention mechanism for spatial attention (across sensory types)
+        self.spatial_attention = nn.Sequential(
+            nn.Linear(num_classes, num_classes),  # Query transformation
+            nn.ReLU(),
+            nn.Dropout(dropout_rate),
+            nn.Linear(num_classes, 1)  # Attention scores
+        )
+        
+        # Attention mechanism for temporal attention (across time steps)
+        if pooling_type == 'attention':
+            self.temporal_attention = nn.Sequential(
+                nn.Linear(num_classes, num_classes),  # Query transformation
+                nn.ReLU(),
+                nn.Dropout(dropout_rate),
+                nn.Linear(num_classes, 1)  # Attention scores
+            )
+    
+    def get_sensory_output(self, x, sensory_type):
+        """
+        Process input through a sensory RNN and return output.
+        
+        Args:
+            x: Input tensor
+            sensory_type: Type of sensory input
+        Returns:
+            RNN output at all time steps [batch_size, time_steps, num_classes]
+        """
+        return self.sensory_rnns[sensory_type](x)
+    
+    def pool_temporal_outputs(self, temporal_outputs):
+        """
+        Pool outputs across time steps.
+        
+        Args:
+            temporal_outputs: Tensor of shape [batch_size, time_steps, num_classes]
+        Returns:
+            Pooled output of shape [batch_size, num_classes]
+        """
+        if self.pooling_type == 'max':
+            return torch.max(temporal_outputs, dim=1)[0]
+        elif self.pooling_type == 'mean':
+            return torch.mean(temporal_outputs, dim=1)
+        elif self.pooling_type == 'attention':
+            # Calculate attention scores for each time step
+            attention_scores = self.temporal_attention(temporal_outputs)  # [batch_size, time_steps, 1]
+            attention_weights = F.softmax(attention_scores, dim=1)  # [batch_size, time_steps, 1]
+            # Apply attention weights
+            return torch.sum(temporal_outputs * attention_weights, dim=1)  # [batch_size, num_classes]
+        else:
+            raise ValueError(f"Unknown pooling type: {self.pooling_type}")
+    
+    def forward(self, x_dict):
+        """
+        Forward pass through the multi-sensory network.
+        
+        Args:
+            x_dict: Dictionary mapping sensory type to input tensor
+        Returns:
+            Classification logits
+        """
+        # Process each sensory input and get outputs at all time steps
+        outputs = []
+        for sensory_type, x in x_dict.items():
+            temporal_outputs = self.get_sensory_output(x, sensory_type)
+            pooled_output = self.pool_temporal_outputs(temporal_outputs)
+            outputs.append(pooled_output)
+        
+        stacked_outputs = torch.stack(outputs, dim=1)  # [batch_size, num_sensory, num_classes]
+        
+        attention_scores = self.spatial_attention(stacked_outputs)  # [batch_size, num_sensory, 1]
+        attention_weights = F.softmax(attention_scores, dim=1)  # [batch_size, num_sensory, 1]
+        attended_output = torch.sum(stacked_outputs * attention_weights, dim=1)  # [batch_size, num_classes]
+        
+        return attended_output   
+
+
 class ThreeHiddenMLP(nn.Module):
     def __init__(self, input_size=784, hidden1_size=29, hidden2_size=147, hidden3_size=400, output_size=10, 
                  freeze=False):
@@ -536,139 +653,3 @@ class TwoHiddenMLP(nn.Module):
         hidden2 = self.relu(torch.matmul(hidden1, self.hidden1_to_hidden2))
         output = self.hidden2_to_output(hidden2)
         return output   
-
-class MultiSensoryRNN(nn.Module):
-    def __init__(self, 
-                 W_init_dict: dict,  # Dictionary mapping sensory type to W_init and dimensions
-                 input_dim: int,
-                 sensory_dims: dict,  # Dictionary mapping sensory type to dimension
-                 num_classes: int,
-                 sio: bool = True,
-                 trainable: bool = False,
-                 dropout_rate: float = 0.2,
-                 time_steps: dict = None,  # Dictionary mapping sensory type to time steps
-                 pooling_type: str = 'max',  # Options: 'max', 'mean', 'attention'
-                 ):
-        """
-        Multi-sensory fusion RNN architecture with max pooling.
-        
-        Args:
-            W_init_dict: Dictionary mapping sensory type to W_init matrix and dimensions
-            input_dim: Input dimension for each sensory channel
-            sensory_dims: Dictionary mapping sensory type to dimension
-            num_classes: Number of output classes
-            sio: Whether to use SIO architecture
-            trainable: Whether RNN weights are trainable
-            dropout_rate: Dropout rate
-            time_steps: Dictionary mapping sensory type to number of time steps
-            pooling_type: Type of pooling to use for temporal outputs ('max', 'mean', or 'attention')
-        """
-        super().__init__()
-        
-        self.sensory_dims = sensory_dims
-        self.time_steps = time_steps or {sensory_type: 2 for sensory_type in sensory_dims.keys()}
-        self.pooling_type = pooling_type
-        
-        # Initialize RNN modules for each sensory channel
-        self.sensory_rnns = nn.ModuleDict()
-        for sensory_type in sensory_dims.keys():
-            # Get the pre-computed W_init and dimensions for this sensory type
-            sensory_config = W_init_dict[sensory_type]
-            W_init = sensory_config['W_init']
-            sensory_dim = sensory_config['sensory_dim']  # Use actual sensory dimension from connectome
-            internal_dim = sensory_config['internal_dim']
-            output_dim = sensory_config['output_dim']
-            
-            self.sensory_rnns[sensory_type] = BasicRNN(
-                W_init=W_init,
-                input_dim=input_dim,
-                sensory_dim=sensory_dim,  # Use actual sensory dimension
-                internal_dim=internal_dim,
-                output_dim=output_dim,
-                num_classes=num_classes,
-                sio=sio,
-                trainable=trainable,
-                pruning=False,
-                dropout_rate=dropout_rate,
-                time_steps=self.time_steps[sensory_type],
-                use_output_projection=True,  # Enable output projection in individual RNNs
-                return_all_steps=True  # Enable returning outputs at all time steps
-            )
-        
-        # Get the output dimension from the first sensory RNN
-        first_sensory_type = next(iter(sensory_dims.keys()))
-        
-        # Attention mechanism for spatial attention (across sensory types)
-        self.spatial_attention = nn.Sequential(
-            nn.Linear(num_classes, num_classes),  # Query transformation
-            nn.ReLU(),
-            nn.Dropout(dropout_rate),
-            nn.Linear(num_classes, 1)  # Attention scores
-        )
-        
-        # Attention mechanism for temporal attention (across time steps)
-        if pooling_type == 'attention':
-            self.temporal_attention = nn.Sequential(
-                nn.Linear(num_classes, num_classes),  # Query transformation
-                nn.ReLU(),
-                nn.Dropout(dropout_rate),
-                nn.Linear(num_classes, 1)  # Attention scores
-            )
-    
-    def get_sensory_output(self, x, sensory_type):
-        """
-        Process input through a sensory RNN and return output.
-        
-        Args:
-            x: Input tensor
-            sensory_type: Type of sensory input
-        Returns:
-            RNN output at all time steps [batch_size, time_steps, num_classes]
-        """
-        return self.sensory_rnns[sensory_type](x)
-    
-    def pool_temporal_outputs(self, temporal_outputs):
-        """
-        Pool outputs across time steps.
-        
-        Args:
-            temporal_outputs: Tensor of shape [batch_size, time_steps, num_classes]
-        Returns:
-            Pooled output of shape [batch_size, num_classes]
-        """
-        if self.pooling_type == 'max':
-            return torch.max(temporal_outputs, dim=1)[0]
-        elif self.pooling_type == 'mean':
-            return torch.mean(temporal_outputs, dim=1)
-        elif self.pooling_type == 'attention':
-            # Calculate attention scores for each time step
-            attention_scores = self.temporal_attention(temporal_outputs)  # [batch_size, time_steps, 1]
-            attention_weights = F.softmax(attention_scores, dim=1)  # [batch_size, time_steps, 1]
-            # Apply attention weights
-            return torch.sum(temporal_outputs * attention_weights, dim=1)  # [batch_size, num_classes]
-        else:
-            raise ValueError(f"Unknown pooling type: {self.pooling_type}")
-    
-    def forward(self, x_dict):
-        """
-        Forward pass through the multi-sensory network.
-        
-        Args:
-            x_dict: Dictionary mapping sensory type to input tensor
-        Returns:
-            Classification logits
-        """
-        # Process each sensory input and get outputs at all time steps
-        outputs = []
-        for sensory_type, x in x_dict.items():
-            temporal_outputs = self.get_sensory_output(x, sensory_type)
-            pooled_output = self.pool_temporal_outputs(temporal_outputs)
-            outputs.append(pooled_output)
-        
-        stacked_outputs = torch.stack(outputs, dim=1)  # [batch_size, num_sensory, num_classes]
-        
-        attention_scores = self.spatial_attention(stacked_outputs)  # [batch_size, num_sensory, 1]
-        attention_weights = F.softmax(attention_scores, dim=1)  # [batch_size, num_sensory, 1]
-        attended_output = torch.sum(stacked_outputs * attention_weights, dim=1)  # [batch_size, num_classes]
-        
-        return attended_output   
