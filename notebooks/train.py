@@ -129,6 +129,12 @@ def initialize_model(config):
             freeze=config.get('freeze', False),
             use_weight_clipping=config.get('use_weight_clipping', True)
         )
+    elif config['type'] == 'cnn':
+        return CNN(
+            input_channels=1,
+            hidden_units=config.get('hidden_units', 509),
+            num_classes=10
+        )
     else:
         raise ValueError(f"Unknown model type: {config['type']}")
 
@@ -145,6 +151,9 @@ def train_epoch(model, optimizer, criterion, train_loader):
             # For multi-sensory model, data should be a dictionary mapping sensory type to input tensor
             data_dict = {sensory_type: data.squeeze(1).to(device) for sensory_type in model.sensory_dims.keys()}
             output = model(data_dict)
+        elif isinstance(model, CNN):
+            data = data.to(device)
+            output = model(data)
         else:
             # For single-sensory models
             data = data.squeeze(1).to(device)
@@ -181,6 +190,9 @@ def evaluate(model, test_loader):
             if isinstance(model, MultiSensoryRNN):
                 data_dict = {sensory_type: data.squeeze(1).to(device) for sensory_type in model.sensory_dims.keys()}
                 output = model(data_dict)
+            elif isinstance(model, CNN):
+                data = data.to(device)
+                output = model(data)
             else:
                 data = data.squeeze(1).to(device)
                 output = model(data)

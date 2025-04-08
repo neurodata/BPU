@@ -18,13 +18,14 @@ SELECTED_SAMPLE = "5%"  # Assuming this matches plot_metrics.ipynb
 
 # Define colors for sensory types - these are the base labels
 SENSORY_COLORS = {
-    "Visual": "#E41A1C",            # Red
-    "Olfactory": "#377EB8",         # Blue
+    "Sight": "#E41A1C",            # Red
+    "Smell": "#377EB8",         # Blue
     "Gut": "#4DAF4A",               # Green
     "Respiratory": "#984EA3",       # Purple
-    "Gustatory-External": "#FF7F00", # Orange
+    "Taste": "#FF7F00", # Orange
     "All Sensory": "#000000",        # Black
-    "Multi-Sensory-Temporal": "#E377C2"   # Pink
+    "MLP": "#818C78", 
+    "CNN": "#9694FF"
 }
 
 def load_sensory_comparison_results():
@@ -36,13 +37,15 @@ def load_sensory_comparison_results():
     # Map of experiment names to sensory types for better labeling
     # This maps to the exact experiment names in the result files
     experiment_to_type = {
-        "Unlearnable_Visual_DPU": "Visual",
-        "Unlearnable_Olfactory_DPU": "Olfactory",
+        "Unlearnable_Visual_DPU": "Sight",
+        "Unlearnable_Olfactory_DPU": "Smell",
         "Unlearnable_Gut_DPU": "Gut",
         "Unlearnable_Respiratory_DPU": "Respiratory",
-        "Unlearnable_Gustatory_DPU": "Gustatory-External",
+        "Unlearnable_Gustatory_DPU": "Taste",
         "Unlearnable_All_Sensory_DPU": "All Sensory",
-        "MultiSensory_Temporal_Fusion": "Multi-Sensory-Temporal"
+        "MultiSensory_Temporal_Fusion": "Multi-Sensory-Temporal",
+        "Unlearnable_Twohidden_MLP": "MLP",
+        "CNN_Model": "CNN"
     }
     
     # Count neurons for each sensory type to enhance the labels
@@ -51,7 +54,7 @@ def load_sensory_comparison_results():
     for fname in os.listdir(RESULTS_DIR):
         # Check if file matches the new format (e.g., Unlearnable_Visual_DPU_trial1.signed.pkl)
         for exp_name, sensory_type in experiment_to_type.items():
-            if re.match(f"^{exp_name}.*(?<!fewshot)\\.signed\\.pkl$", fname):
+            if re.match(f"^{exp_name}.*(?<!fewshot)\\.signed\\.pkl$", fname) and "fewshot" not in fname:
                 with open(os.path.join(RESULTS_DIR, fname), "rb") as f:
                     results = pickle.load(f)
                     
@@ -81,26 +84,27 @@ def plot_sensory_comparison():
     
     data = load_sensory_comparison_results()
     
-    # Custom legend names mapping
+    # Custom legend names mapping with simplified format
     custom_legend_names = {
-        "Visual": "Visual (29 neurons, 4 timesteps)",
-        "Olfactory": "Olfactory (42 neurons, 3 timesteps)",
-        "Gut": "Gut (85 neurons, 2 timesteps)",
-        "Respiratory": "Respiratory (26 neurons, 2 timesteps)",
-        "Gustatory-External": "Gustatory-External (131 neurons, 3 timesteps)",
-        "All Sensory": "All Sensory (430 neurons, 2 timesteps)",
-        "Multi-Sensory-Temporal": "Multi-Sensory + Temporal Attention"
+        "Sight": "Sight (29/4)",
+        "Smell": "Smell (42/3)",
+        "Gut": "Gut (85/2)",
+        "Respiratory": "Respiratory (26/2)",
+        "Taste": "Taste (131/3)",
+        "All Sensory": "All Sensory (430/2)",
+        "Unlearnable_Twohidden_MLP": "MLP",
+        "CNN_Model": "CNN"
     }
     
     # Define custom order for plotting
     custom_order = [
-        "Multi-Sensory-Temporal",
         "All Sensory",
-        "Gustatory-External",
+        "Taste",
         "Gut",
-        "Olfactory",
-        "Visual",
+        "Smell",
+        "Sight",
         "Respiratory",
+        "MLP"
     ]
     
     # Sort data according to custom order
@@ -114,8 +118,12 @@ def plot_sensory_comparison():
         # Extract the base sensory type from the enhanced label (e.g., "Visual (123 neurons)" -> "Visual")
         base_sensory_type = sensory_label.split(" (")[0] 
         
+        # Skip multi-sensory
+        if base_sensory_type == "Multi-Sensory-Temporal":
+            continue
+            
         # Use custom legend name if available, otherwise use the original label
-        legend_name = custom_legend_names.get(sensory_label, sensory_label)
+        legend_name = custom_legend_names.get(base_sensory_type, sensory_label)
         
         # Extract accuracy values from each result dictionary
         acc_values = []
@@ -153,34 +161,34 @@ def plot_sensory_comparison():
             x, mean,
             color=color,
             label=legend_name,  # Use custom legend name
-            linewidth=2.5
+            linewidth=3.0 if base_sensory_type == 'MLP' and base_sensory_type == 'CNN' else 2.5,  # Thicker line for MLP
+            linestyle='-' if base_sensory_type != 'MLP' and base_sensory_type != 'CNN' else '--',  # Use dash-dot line for MLP
+            alpha=1.0 if base_sensory_type != 'MLP' and base_sensory_type != 'CNN' else 0.9  # Slightly reduce opacity for MLP
         )
         
         # Plot standard deviation as shaded area
         plt.fill_between(
             x, mean - std, mean + std,
             color=color,
-            alpha=0.15
+            alpha=0.15 if base_sensory_type != 'MLP' and base_sensory_type != 'CNN' else 0.2  # Increase opacity for MLP error band
         )
     
+    plt.title("Input type (# neurons / # output time steps)", fontsize=32, pad=28)
     plt.xlabel("Epochs", fontsize=24)
     plt.ylabel("Test Accuracy", fontsize=24)
     plt.xlim(1, 10)  # Only show epochs 1-10
     plt.ylim(0.9, 1.0)  # Set y-axis range to 0.9-1.0 for better visualization
     plt.grid(True, alpha=0.3)
-    plt.xticks(fontsize=20)
-    plt.yticks(fontsize=20)
+    plt.xticks(fontsize=24)
+    plt.yticks(fontsize=24)
     
     legend = plt.legend(
-        loc='center left',           
-        bbox_to_anchor=(1.02, 0.5),   
-        ncol=1,                    
+        loc='lower center',           
+        bbox_to_anchor=(0.5, -0.4),   
+        ncol=4,                    
         frameon=False,
         fontsize=24,
-        labelspacing=1.2,
-        borderaxespad=1.0       
     )
-
     
     # Create figures directory if it doesn't exist
     figures_dir = os.path.join(PROJECT_ROOT, "plotting", "figures")

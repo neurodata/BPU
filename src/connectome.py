@@ -45,7 +45,8 @@ def load_connectivity_data(connectivity_path, annotation_path, rescale_factor=4e
     """
 
     df_annot = pd.read_csv(annotation_path)
-    output_types = {'DN-SEZ', 'DN-VNC', 'RGN'}
+    # output_types = {'DN-SEZ', 'DN-VNC', 'RGN'}
+    output_types = {'DN-SEZ','RGN'}
     sensory_ids = []
     output_ids = []
 
